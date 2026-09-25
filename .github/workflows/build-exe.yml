@@ -1,11 +1,11 @@
-name: Build and Commit Windows EXE
+name: Build and Release Windows EXE
 
 on:
   push:
     branches: [ "main", "master" ]
 
 jobs:
-  build-and-commit:
+  build-and-release:
     runs-on: windows-latest
     permissions:
       contents: write
@@ -28,10 +28,30 @@ jobs:
     - name: Compile to Windows EXE using pkg
       run: npx pkg . --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
 
-    - name: Commit and Push EXE to Repository
+    - name: Compress EXE to ZIP
+      shell: pwsh
       run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add -f dist-exe/ToraDelia-Kiosk.exe
-        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-build Windows EXE [skip ci]"
-        git push
+        Compress-Archive -Path dist-exe/ToraDelia-Kiosk.exe -DestinationPath dist-exe/ToraDelia-Kiosk-Windows.zip -Force
+
+    - name: Upload to GitHub Actions Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ToraDelia-Kiosk-Windows-EXE
+        path: |
+          dist-exe/ToraDelia-Kiosk.exe
+          dist-exe/ToraDelia-Kiosk-Windows.zip
+
+    - name: Publish or Update GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: "גרסה אחרונה להורדה (Latest Windows Kiosk)"
+        body: |
+          קובץ EXE מוכן להרצה של עמדת תורה דיליה עבור Windows.
+          
+          לחצו למטה על **ToraDelia-Kiosk.exe** או **ToraDelia-Kiosk-Windows.zip** להורדה מיידית!
+        files: |
+          dist-exe/ToraDelia-Kiosk.exe
+          dist-exe/ToraDelia-Kiosk-Windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

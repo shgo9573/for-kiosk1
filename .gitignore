@@ -4,5 +4,7 @@ dist/
 coverage/
 .DS_Store
 *.log
+dist-exe/
+*.exe
 .env*
 !.env.example
