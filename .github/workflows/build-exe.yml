@@ -28,6 +28,9 @@ jobs:
     - name: Compile to Windows EXE using pkg
       run: npx pkg . --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
 
+    - name: Patch EXE to Native Windows GUI Subsystem (No Console Window)
+      run: node scripts/make-gui-exe.cjs dist-exe/ToraDelia-Kiosk.exe
+
     - name: Compress EXE to ZIP
       shell: pwsh
       run: |
@@ -49,7 +52,9 @@ jobs:
         body: |
           קובץ EXE מוכן להרצה של עמדת תורה דיליה עבור Windows.
           
-          לחצו למטה על **ToraDelia-Kiosk.exe** או **ToraDelia-Kiosk-Windows.zip** להורדה מיידית!
+          ### קבצים להורדה ישירה:
+          - **ToraDelia-Kiosk.exe**: קובץ הפעלה עצמאי ישיר (רץ כתוכנת שולחן עבודה נקייה ללא שום חלון שחור!).
+          - **ToraDelia-Kiosk-Windows.zip**: קובץ ה-EXE דחוס להורדה קלה ומהירה.
         files: |
           dist-exe/ToraDelia-Kiosk.exe
           dist-exe/ToraDelia-Kiosk-Windows.zip

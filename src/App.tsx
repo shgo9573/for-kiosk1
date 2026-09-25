@@ -77,6 +77,15 @@ export default function App() {
     config.dDriveTargetPath ||
     `${config.targetDriveLetter || 'D'}:\\${config.targetFolderName || 'תורה דיליה'}`;
 
+  // Keep standalone kiosk server alive and sync close lifecycle
+  useEffect(() => {
+    fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    const interval = setInterval(() => {
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = initAuth(
       (user, token) => {

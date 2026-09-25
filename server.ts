@@ -356,6 +356,45 @@ app.post('/api/local-folder-search', async (req, res) => {
   }
 });
 
+let lastHeartbeat = Date.now();
+let hasConnected = false;
+
+app.post('/api/heartbeat', (req, res) => {
+  lastHeartbeat = Date.now();
+  hasConnected = true;
+  res.json({ ok: true });
+});
+
+// Auto-exit when standalone kiosk window is closed
+if ((process as any).pkg) {
+  setInterval(() => {
+    if (hasConnected && Date.now() - lastHeartbeat > 7000) {
+      console.log('[Kiosk Server] Client window closed, exiting.');
+      process.exit(0);
+    }
+  }, 2000);
+}
+
+function launchKioskApp(listenPort: number) {
+  const url = `http://localhost:${listenPort}`;
+  if (process.platform !== 'win32' && !(process as any).pkg) return;
+
+  import('child_process').then(({ exec }) => {
+    // 1. Try Microsoft Edge in dedicated App Mode (clean native desktop window, no browser tabs/URL bar)
+    exec(`start "" msedge --app="${url}" --new-window`, (edgeErr) => {
+      if (edgeErr) {
+        // 2. Try Chrome in App Mode
+        exec(`start "" chrome --app="${url}" --new-window`, (chromeErr) => {
+          if (chromeErr) {
+            // 3. Fallback to default browser
+            exec(`start "" "${url}"`);
+          }
+        });
+      }
+    });
+  }).catch(() => {});
+}
+
 async function startServer() {
   if (!isProd && !(process as any).pkg) {
     const { createServer: createViteServer } = await import('vite');
@@ -382,9 +421,7 @@ async function startServer() {
   app.listen(port, '0.0.0.0', () => {
     console.log(`[Kiosk Server] Listening on http://0.0.0.0:${port}`);
     if (process.platform === 'win32' || (process as any).pkg) {
-      import('child_process').then(({ exec }) => {
-        exec(`start http://localhost:${port}`);
-      }).catch(() => {});
+      launchKioskApp(port);
     }
   });
 }
