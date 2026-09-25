@@ -25,3 +25,32 @@
   font-weight: 700 !important;
   color: #0f172a !important;
 }
+
+.docx-content-page {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, "David", "FrankRuehl", serif;
+  color: #0f172a;
+}
+
+.docx-content-page h1,
+.docx-content-page h2,
+.docx-content-page h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-bottom: 0.35rem;
+  color: #091224;
+}
+
+.docx-content-page p {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin-bottom: 0.35rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.docx-content-page strong,
+.docx-content-page b {
+  font-weight: 800;
+  color: #000000;
+}

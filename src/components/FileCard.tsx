@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Printer,
-  FolderDown,
+  Usb,
   CheckCircle2,
   Loader2,
   FileText,
@@ -30,7 +30,7 @@ export const FileCard: React.FC<FileCardProps> = ({
   isCopied = false,
   isPrinted = false,
 }) => {
-  const driveLabel = targetDriveLetter.toUpperCase();
+  const driveLabel = (targetDriveLetter || 'D').toUpperCase();
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return '';
@@ -59,7 +59,7 @@ export const FileCard: React.FC<FileCardProps> = ({
       <div className="mb-3">
         <div className="flex items-start gap-2.5">
           <div className="p-2 rounded bg-slate-100 border border-slate-200 shrink-0 text-[#0f1d38]">
-            <FileText className="w-5 h-5" />
+            <FileText className="w-5 h-5 text-blue-800" />
           </div>
           <div className="flex-1 min-w-0">
             <h3
@@ -77,20 +77,26 @@ export const FileCard: React.FC<FileCardProps> = ({
         </div>
       </div>
 
-      {/* First Page Visual Thumbnail (2x larger text) */}
-      <div className="w-full h-64 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center p-2 mb-3.5 cursor-default">
+      {/* First Page Visual Thumbnail */}
+      <div className="w-full h-64 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center mb-3.5 cursor-default">
         <RealDocxThumbnail file={file} />
 
         {/* Status Overlay Badges */}
         <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
           {isCopied && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
+            <span
+              style={{ backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }}
+              className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border shadow-sm"
+            >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>הועתק ל-{driveLabel}</span>
+              <span>הועתק לדיסק און קי</span>
             </span>
           )}
           {isPrinted && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-300 shadow-sm">
+            <span
+              style={{ backgroundColor: '#dbeafe', color: '#1e40af', borderColor: '#93c5fd' }}
+              className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border shadow-sm"
+            >
               <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
               <span>הודפס</span>
             </span>
@@ -105,37 +111,42 @@ export const FileCard: React.FC<FileCardProps> = ({
           type="button"
           disabled={isPrinting}
           onClick={() => onPrint(file)}
-          className={`py-2.5 px-3 rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition border cursor-pointer ${
-            isPrinted
-              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-              : 'bg-[#0f1d38] hover:bg-[#182c53] active:scale-95 text-white border-[#0f1d38]'
-          } disabled:opacity-50`}
+          style={{
+            backgroundColor: isPrinted ? '#f1f5f9' : '#0f1d38',
+            color: isPrinted ? '#334155' : '#ffffff',
+            borderColor: isPrinted ? '#cbd5e1' : '#0f1d38',
+          }}
+          className="py-2.5 px-2 rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition border cursor-pointer active:scale-95 disabled:opacity-50 hover:opacity-95"
         >
           {isPrinting ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
           ) : (
-            <Printer className="w-3.5 h-3.5" />
+            <Printer className="w-4 h-4 shrink-0" />
           )}
-          <span>{isPrinting ? 'שולח...' : isPrinted ? 'הדפס שוב' : 'הדפסה'}</span>
+          <span className="truncate">{isPrinting ? 'שולח...' : isPrinted ? 'הדפס שוב' : 'הדפסה'}</span>
         </button>
 
-        {/* Copy to Target Drive Button */}
+        {/* Copy to USB Flash Drive Button */}
         <button
           type="button"
           disabled={isCopying}
           onClick={() => onCopyToD(file)}
-          className={`py-2.5 px-3 rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition border cursor-pointer ${
-            isCopied
-              ? 'bg-slate-100 hover:bg-slate-200 text-emerald-800 border-emerald-300'
-              : 'bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white border-emerald-700'
-          } disabled:opacity-50`}
+          style={{
+            backgroundColor: isCopied ? '#ecfdf5' : '#047857',
+            color: isCopied ? '#065f46' : '#ffffff',
+            borderColor: isCopied ? '#6ee7b7' : '#047857',
+          }}
+          className="py-2.5 px-2 rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition border cursor-pointer active:scale-95 disabled:opacity-50 hover:opacity-95"
+          title={`העתק לדיסק און קי (כונן ${driveLabel}:)`}
         >
           {isCopying ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
           ) : (
-            <FolderDown className="w-3.5 h-3.5" />
+            <Usb className="w-4 h-4 shrink-0" />
           )}
-          <span>{isCopying ? 'מעתיק...' : isCopied ? `הועתק ל-${driveLabel}` : `העתק ל-${driveLabel}`}</span>
+          <span className="truncate">
+            {isCopying ? 'מעתיק...' : isCopied ? 'הועתק לדיסק און קי' : 'העתק לדיסק און קי'}
+          </span>
         </button>
       </div>
     </div>

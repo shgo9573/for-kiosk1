@@ -180,17 +180,35 @@ export class GoogleDriveService {
   static async fetchFileBlob(
     file: KioskFile
   ): Promise<{ base64: string; arrayBuffer: ArrayBuffer }> {
+    // 0. Immediate local base64 cache if available
+    if (file.base64Data && file.base64Data.length > 50) {
+      try {
+        const binary = atob(file.base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return { base64: file.base64Data, arrayBuffer: bytes.buffer };
+      } catch (err) {
+        console.warn('Failed to decode existing base64Data, will fetch fresh:', err);
+      }
+    }
+
     // 1. Try server-side proxy
     try {
       const proxyRes = await fetch('/api/fetch-drive-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId: file.id }),
+        body: JSON.stringify({ fileId: file.id, fileName: file.name }),
       });
 
       if (proxyRes.ok) {
         const data = await proxyRes.json();
+        if (data.previewHtml && !file.previewHtml) {
+          file.previewHtml = data.previewHtml;
+        }
         if (data.base64) {
+          file.base64Data = data.base64;
           const binary = atob(data.base64);
           const bytes = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i++) {
@@ -203,25 +221,35 @@ export class GoogleDriveService {
       console.warn('Proxy file fetch failed, trying direct:', e);
     }
 
-    // 2. Direct fetch
-    const fetchUrl = `https://drive.usercontent.google.com/download?id=${file.id}&export=download&authuser=0`;
-    const res = await fetch(fetchUrl);
+    // 2. Direct fetch from Google Drive
+    const candidateUrls = [
+      `https://docs.google.com/document/d/${file.id}/export?format=docx`,
+      `https://drive.usercontent.google.com/download?id=${file.id}&export=download&authuser=0`,
+      `https://drive.google.com/uc?export=download&id=${file.id}&confirm=t`,
+    ];
 
-    if (!res.ok) {
-      throw new Error(`שגיאה בהורדת הקובץ מדרייב (${res.status})`);
+    for (const fetchUrl of candidateUrls) {
+      try {
+        const res = await fetch(fetchUrl);
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          if (arrayBuffer.byteLength > 100) {
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              const chunk = bytes.subarray(i, i + chunkSize);
+              binary += String.fromCharCode.apply(null, Array.from(chunk));
+            }
+            const base64 = btoa(binary);
+            file.base64Data = base64;
+            return { base64, arrayBuffer };
+          }
+        }
+      } catch {}
     }
 
-    const arrayBuffer = await res.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    const base64 = btoa(binary);
-
-    return { base64, arrayBuffer };
+    throw new Error(`לא ניתן להוריד את הקובץ "${file.name}" כעת`);
   }
 
   /**

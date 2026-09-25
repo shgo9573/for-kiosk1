@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LogOut,
   FolderOpen,
-  FolderDown,
+  Usb,
   Clock,
   Loader2,
   FileText,
@@ -98,14 +98,19 @@ export const StudentFilesScreen: React.FC<StudentFilesScreenProps> = ({
               type="button"
               onClick={onCopyAllToD}
               disabled={isCopyingAll}
-              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white border border-emerald-700 text-xs font-bold shadow-sm flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
+              style={{
+                backgroundColor: '#047857',
+                color: '#ffffff',
+                borderColor: '#047857',
+              }}
+              className="px-4 py-2 rounded-lg text-white border text-xs font-bold shadow-sm flex items-center gap-2 transition disabled:opacity-50 cursor-pointer active:scale-95 hover:opacity-95"
             >
               {isCopyingAll ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
               ) : (
-                <FolderDown className="w-3.5 h-3.5" />
+                <Usb className="w-4 h-4 text-white shrink-0" />
               )}
-              <span>העתק הכל ל-<strong className="font-mono text-white" dir="ltr">{targetPath}</strong></span>
+              <span>העתק הכל לדיסק און קי (<strong className="font-mono text-white" dir="ltr">{targetPath}</strong>)</span>
             </button>
           )}
 

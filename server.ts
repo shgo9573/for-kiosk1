@@ -274,9 +274,11 @@ app.post('/api/fetch-drive-file', async (req, res) => {
     }
 
     const candidateUrls = [
+      `https://docs.google.com/document/d/${fileId}/export?format=docx`,
       `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0`,
       `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`,
       `https://drive.google.com/uc?id=${fileId}&export=download`,
+      `https://docs.google.com/document/d/${fileId}/export?format=pdf`,
     ];
 
     const headers: Record<string, string> = {
@@ -288,10 +290,24 @@ app.post('/api/fetch-drive-file', async (req, res) => {
       try {
         const fileRes = await fetch(url, { headers });
         if (fileRes.ok) {
+          const contentType = fileRes.headers.get('content-type') || '';
+          // Avoid returning html login/error pages as file content
+          if (contentType.includes('text/html') && !url.includes('format=docx')) {
+            continue;
+          }
           const arrayBuffer = await fileRes.arrayBuffer();
-          if (arrayBuffer.byteLength > 0) {
-            const base64 = Buffer.from(arrayBuffer).toString('base64');
-            return res.json({ base64, size: arrayBuffer.byteLength });
+          if (arrayBuffer.byteLength > 100) {
+            const buffer = Buffer.from(arrayBuffer);
+            const base64 = buffer.toString('base64');
+            let previewHtml: string | undefined;
+            try {
+              const mammoth = await import('mammoth');
+              const mRes = await mammoth.convertToHtml({ buffer });
+              if (mRes.value && mRes.value.trim().length > 0) {
+                previewHtml = mRes.value;
+              }
+            } catch {}
+            return res.json({ base64, size: arrayBuffer.byteLength, previewHtml });
           }
         }
       } catch (e) {
@@ -302,6 +318,42 @@ app.post('/api/fetch-drive-file', async (req, res) => {
     return res.status(404).json({ error: 'Could not fetch file from Google Drive' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Proxy for Google Drive thumbnails
+app.get('/api/drive-thumbnail', async (req, res) => {
+  try {
+    const fileId = req.query.fileId as string;
+    if (!fileId) return res.status(400).send('fileId is required');
+
+    const urls = [
+      `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`,
+      `https://lh3.googleusercontent.com/d/${fileId}=w800`,
+    ];
+
+    for (const u of urls) {
+      try {
+        const tRes = await fetch(u, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+        });
+        if (tRes.ok) {
+          const cType = tRes.headers.get('content-type') || 'image/jpeg';
+          if (cType.startsWith('image/')) {
+            const buf = await tRes.arrayBuffer();
+            res.setHeader('Content-Type', cType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.send(Buffer.from(buf));
+          }
+        }
+      } catch {}
+    }
+    return res.status(404).send('Not found');
+  } catch {
+    return res.status(500).send('Error');
   }
 });
 
@@ -330,28 +382,49 @@ app.post('/api/local-folder-search', async (req, res) => {
     const dirPath = path.join(searchPath, matchingDir.name);
     const fileEntries = fs.readdirSync(dirPath, { withFileTypes: true });
 
-    const files = fileEntries
-      .filter((f) => f.isFile())
-      .map((f) => {
-        const filePath = path.join(dirPath, f.name);
-        const stats = fs.statSync(filePath);
-        const buffer = fs.readFileSync(filePath);
-        const base64 = buffer.toString('base64');
-        const lower = f.name.toLowerCase();
-        const isWord = lower.endsWith('.docx') || lower.endsWith('.doc');
+    const mammoth = await import('mammoth').catch(() => null);
 
-        return {
-          id: 'local_' + f.name,
-          name: f.name,
-          mimeType: isWord
-            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            : 'application/octet-stream',
-          size: stats.size,
-          modifiedTime: stats.mtime.toISOString(),
-          isWordDoc: isWord,
-          base64Data: base64,
-        };
-      });
+    const files = await Promise.all(
+      fileEntries
+        .filter((f) => f.isFile())
+        .map(async (f) => {
+          const filePath = path.join(dirPath, f.name);
+          const stats = fs.statSync(filePath);
+          const buffer = fs.readFileSync(filePath);
+          const base64 = buffer.toString('base64');
+          const lower = f.name.toLowerCase();
+          const isWord = lower.endsWith('.docx') || lower.endsWith('.doc');
+          let previewHtml: string | undefined;
+          let snippet: string | undefined;
+
+          if (lower.endsWith('.docx') && mammoth) {
+            try {
+              const mRes = await mammoth.convertToHtml({ buffer });
+              if (mRes.value && mRes.value.trim().length > 0) {
+                previewHtml = mRes.value;
+                const tRes = await mammoth.extractRawText({ buffer });
+                snippet = tRes.value.slice(0, 200);
+              }
+            } catch (mErr) {
+              console.warn('Mammoth preview extraction error:', mErr);
+            }
+          }
+
+          return {
+            id: 'local_' + f.name,
+            name: f.name,
+            mimeType: isWord
+              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : 'application/octet-stream',
+            size: stats.size,
+            modifiedTime: stats.mtime.toISOString(),
+            isWordDoc: isWord,
+            base64Data: base64,
+            previewHtml,
+            snippet,
+          };
+        })
+    );
 
     return res.json({
       found: true,
