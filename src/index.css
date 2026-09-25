@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+.preview-2x-text,
+.preview-2x-text p,
+.preview-2x-text span,
+.preview-2x-text div,
+.preview-2x-text td,
+.preview-2x-text th,
+.preview-2x-text h1,
+.preview-2x-text h2,
+.preview-2x-text h3,
+.preview-2x-text strong,
+.preview-2x-text b {
+  font-size: 20px !important;
+  line-height: 1.4 !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, "David", "FrankRuehl", serif !important;
+}
+
+.real-docx-page-view,
+.real-docx-page-view * {
+  font-size: 19px !important;
+  line-height: 1.35 !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
