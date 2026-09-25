@@ -356,6 +356,18 @@ app.post('/api/local-folder-search', async (req, res) => {
   }
 });
 
+process.on('uncaughtException', (err) => {
+  try {
+    fs.appendFileSync(path.join(process.cwd(), 'kiosk-error.log'), `[${new Date().toISOString()}] Uncaught: ${err.stack || err}\n`);
+  } catch {}
+});
+
+process.on('unhandledRejection', (err: any) => {
+  try {
+    fs.appendFileSync(path.join(process.cwd(), 'kiosk-error.log'), `[${new Date().toISOString()}] Rejection: ${err?.stack || err}\n`);
+  } catch {}
+});
+
 let lastHeartbeat = Date.now();
 let hasConnected = false;
 
@@ -365,34 +377,99 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ ok: true });
 });
 
-// Auto-exit when standalone kiosk window is closed
+// Auto-exit when standalone kiosk window is closed (with safe initial grace period)
 if ((process as any).pkg) {
   setInterval(() => {
-    if (hasConnected && Date.now() - lastHeartbeat > 7000) {
+    if (hasConnected && Date.now() - lastHeartbeat > 12000) {
       console.log('[Kiosk Server] Client window closed, exiting.');
       process.exit(0);
     }
-  }, 2000);
+  }, 3000);
 }
 
 function launchKioskApp(listenPort: number) {
   const url = `http://localhost:${listenPort}`;
   if (process.platform !== 'win32' && !(process as any).pkg) return;
 
-  import('child_process').then(({ exec }) => {
-    // 1. Try Microsoft Edge in dedicated App Mode (clean native desktop window, no browser tabs/URL bar)
-    exec(`start "" msedge --app="${url}" --new-window`, (edgeErr) => {
-      if (edgeErr) {
-        // 2. Try Chrome in App Mode
-        exec(`start "" chrome --app="${url}" --new-window`, (chromeErr) => {
-          if (chromeErr) {
-            // 3. Fallback to default browser
-            exec(`start "" "${url}"`);
-          }
+  import('child_process').then(({ spawn, exec }) => {
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env['LOCALAPPDATA'] || '';
+
+    // Direct path candidates for Microsoft Edge (installed on 99%+ of Windows 10/11)
+    const edgeCandidates = [
+      path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(localAppData, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ];
+
+    // Direct path candidates for Google Chrome
+    const chromeCandidates = [
+      path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ];
+
+    const edgePath = edgeCandidates.find((p) => {
+      try { return fs.existsSync(p); } catch { return false; }
+    });
+
+    if (edgePath) {
+      try {
+        const edgeProc = spawn(edgePath, [`--app=${url}`, '--new-window'], {
+          detached: true,
+          stdio: 'ignore',
         });
+        edgeProc.unref();
+        return;
+      } catch (e) {}
+    }
+
+    const chromePath = chromeCandidates.find((p) => {
+      try { return fs.existsSync(p); } catch { return false; }
+    });
+
+    if (chromePath) {
+      try {
+        const chromeProc = spawn(chromePath, [`--app=${url}`, '--new-window'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        chromeProc.unref();
+        return;
+      } catch (e) {}
+    }
+
+    // PowerShell fallback (resolves system browser with Windows Shell)
+    const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process '${url}'"`;
+    exec(psCmd, (err) => {
+      if (err) {
+        exec(`cmd /c start "" "${url}"`);
       }
     });
   }).catch(() => {});
+}
+
+function findPort(startPort: number): Promise<number> {
+  return new Promise((resolve) => {
+    import('net').then(({ default: net }) => {
+      function test(p: number) {
+        const server = net.createServer();
+        server.once('error', (err: any) => {
+          if (err.code === 'EADDRINUSE') {
+            test(p + 1);
+          } else {
+            resolve(p);
+          }
+        });
+        server.once('listening', () => {
+          server.close(() => resolve(p));
+        });
+        server.listen(p, '0.0.0.0');
+      }
+      test(startPort);
+    }).catch(() => resolve(startPort));
+  });
 }
 
 async function startServer() {
@@ -410,18 +487,30 @@ async function startServer() {
       path.join(process.cwd(), 'dist'),
       path.join(process.cwd()),
     ];
-    const staticDir = candidates.find((dir) => fs.existsSync(path.join(dir, 'index.html'))) || path.resolve(currentDirname, 'dist');
+    const staticDir = candidates.find((dir) => {
+      try { return fs.existsSync(path.join(dir, 'index.html')); } catch { return false; }
+    }) || path.resolve(currentDirname, 'dist');
 
     app.use(express.static(staticDir));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(staticDir, 'index.html'));
+      const indexPath = path.join(staticDir, 'index.html');
+      try {
+        if (fs.existsSync(indexPath)) {
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.send(fs.readFileSync(indexPath, 'utf-8'));
+          return;
+        }
+      } catch {}
+      res.sendFile(indexPath);
     });
   }
 
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`[Kiosk Server] Listening on http://0.0.0.0:${port}`);
+  const activePort = await findPort(port);
+
+  app.listen(activePort, '0.0.0.0', () => {
+    console.log(`[Kiosk Server] Listening on http://0.0.0.0:${activePort}`);
     if (process.platform === 'win32' || (process as any).pkg) {
-      launchKioskApp(port);
+      launchKioskApp(activePort);
     }
   });
 }

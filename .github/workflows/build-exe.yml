@@ -31,6 +31,12 @@ jobs:
     - name: Patch EXE to Native Windows GUI Subsystem (No Console Window)
       run: node scripts/make-gui-exe.cjs dist-exe/ToraDelia-Kiosk.exe
 
+    - name: Install UPX Compressor
+      run: choco install upx --no-progress
+
+    - name: Compress EXE with UPX (Reduce size to ~45MB)
+      run: upx --best dist-exe/ToraDelia-Kiosk.exe
+
     - name: Compress EXE to ZIP
       shell: pwsh
       run: |
@@ -50,11 +56,11 @@ jobs:
         tag_name: latest
         name: "גרסה אחרונה להורדה (Latest Windows Kiosk)"
         body: |
-          קובץ EXE מוכן להרצה של עמדת תורה דיליה עבור Windows.
+          קובץ EXE מוכן להרצה של עמדת תורה דיליה עבור Windows (דחוס עם UPX לגודל של ~45MB).
           
           ### קבצים להורדה ישירה:
-          - **ToraDelia-Kiosk.exe**: קובץ הפעלה עצמאי ישיר (רץ כתוכנת שולחן עבודה נקייה ללא שום חלון שחור!).
-          - **ToraDelia-Kiosk-Windows.zip**: קובץ ה-EXE דחוס להורדה קלה ומהירה.
+          - **ToraDelia-Kiosk.exe**: קובץ הפעלה עצמאי ישיר (מכווץ עם UPX, רץ כתוכנת שולחן עבודה נקייה ללא שום חלון שחור!).
+          - **ToraDelia-Kiosk-Windows.zip**: קובץ ה-EXE דחוס להורדה מהירה במיוחד.
         files: |
           dist-exe/ToraDelia-Kiosk.exe
           dist-exe/ToraDelia-Kiosk-Windows.zip
