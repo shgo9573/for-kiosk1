@@ -28,6 +28,9 @@ jobs:
     - name: Compile Windows EXE with Brotli Compression (~45MB)
       run: npx pkg dist/server.cjs --config pkg-config.json -C Brotli --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
 
+    - name: Hide Console Window (Set Windows GUI Subsystem)
+      run: node scripts/set-gui-subsystem.cjs dist-exe/ToraDelia-Kiosk.exe
+
     - name: Compress EXE to ZIP
       shell: pwsh
       run: |
@@ -47,12 +50,12 @@ jobs:
         tag_name: latest
         name: "גרסה אחרונה להורדה (Latest Windows Kiosk)"
         body: |
-          עמדת תורה דיליה עבור Windows - גרסה עצמאית עם חלון לוגים מפורט ומכווצת (כ-45MB בלבד!).
+          עמדת תורה דיליה עבור Windows - גרסה עצמאית ונקייה ללא חלון שחור (Windowed GUI Kiosk).
           
           ### הוראות הפעלה:
           1. הורידו את **ToraDelia-Kiosk.exe** (או את קובץ ה-ZIP).
           2. לחצו לחיצה כפולה על **ToraDelia-Kiosk.exe**.
-          3. ייפתח חלון קונסולה עם לוגים מפורטים המציגים כל שלב (שרת, איתור דפדפן, פתיחת העמדה) וייפתח חלון העמדה.
+          3. חלון עמדת תורה דיליה ייפתח מיד כחלון אפליקציה ייעודי ונקי, ללא חלון קונסולה שחור.
         files: |
           dist-exe/ToraDelia-Kiosk.exe
           dist-exe/ToraDelia-Kiosk-Windows.zip

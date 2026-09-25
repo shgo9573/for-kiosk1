@@ -424,17 +424,26 @@ function launchKioskApp(listenPort: number) {
       try { return fs.existsSync(p); } catch { return false; }
     });
 
+    const appArgs = [
+      `--app=${url}`,
+      '--new-window',
+      '--window-size=1366,768',
+      '--disable-extensions',
+      '--no-first-run',
+      '--disable-features=Translate',
+      '--disable-default-apps',
+    ];
+
     if (edgePath) {
       console.log(`[+] נמצא Microsoft Edge בנתיב: ${edgePath}`);
       console.log(`[4/4] פותח את חלון העמדה (Edge App Mode)...`);
       try {
-        const edgeProc = spawn(edgePath, [`--app=${url}`, '--new-window'], {
+        const edgeProc = spawn(edgePath, appArgs, {
           detached: true,
           stdio: 'ignore',
         });
         edgeProc.unref();
         console.log(`[V] חלון העמדה נפתח בהצלחה!`);
-        console.log(`    (ניתן למזער חלון שחור זה, העמדה תפעל ברקע)`);
         return;
       } catch (e) {
         console.error(`[-] שגיאה בפתיחת Edge:`, e);
@@ -449,13 +458,12 @@ function launchKioskApp(listenPort: number) {
       console.log(`[+] נמצא Google Chrome בנתיב: ${chromePath}`);
       console.log(`[4/4] פותח את חלון העמדה (Chrome App Mode)...`);
       try {
-        const chromeProc = spawn(chromePath, [`--app=${url}`, '--new-window'], {
+        const chromeProc = spawn(chromePath, appArgs, {
           detached: true,
           stdio: 'ignore',
         });
         chromeProc.unref();
         console.log(`[V] חלון העמדה נפתח בהצלחה!`);
-        console.log(`    (ניתן למזער חלון שחור זה, העמדה תפעל ברקע)`);
         return;
       } catch (e) {
         console.error(`[-] שגיאה בפתיחת Chrome:`, e);
