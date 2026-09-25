@@ -7,17 +7,19 @@
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
     "build": "vite build",
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/server.cjs --external:vite",
+    "build:app": "npm run build && npm run build:server",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
-  "bin": "server.ts",
+  "bin": "dist/server.cjs",
   "pkg": {
     "assets": [
       "dist/**/*"
     ],
     "targets": [
-      "node20-win-x64"
+      "node18-win-x64"
     ],
     "outputPath": "dist-exe"
   },

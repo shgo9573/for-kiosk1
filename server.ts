@@ -4,8 +4,8 @@ import fs from 'fs';
 import vm from 'vm';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
+const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFilename ? path.dirname(currentFilename) : process.cwd());
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -357,7 +357,7 @@ app.post('/api/local-folder-search', async (req, res) => {
 });
 
 async function startServer() {
-  if (!isProd) {
+  if (!isProd && !(process as any).pkg) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -365,14 +365,27 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    const candidates = [
+      path.resolve(currentDirname, 'dist'),
+      path.resolve(currentDirname),
+      path.join(process.cwd(), 'dist'),
+      path.join(process.cwd()),
+    ];
+    const staticDir = candidates.find((dir) => fs.existsSync(path.join(dir, 'index.html'))) || path.resolve(currentDirname, 'dist');
+
+    app.use(express.static(staticDir));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.join(staticDir, 'index.html'));
     });
   }
 
   app.listen(port, '0.0.0.0', () => {
     console.log(`[Kiosk Server] Listening on http://0.0.0.0:${port}`);
+    if (process.platform === 'win32' || (process as any).pkg) {
+      import('child_process').then(({ exec }) => {
+        exec(`start http://localhost:${port}`);
+      }).catch(() => {});
+    }
   });
 }
 

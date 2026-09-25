@@ -17,16 +17,16 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '18'
 
     - name: Install dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web App (Vite)
-      run: npm run build
+    - name: Build Web App & Bundle Server
+      run: npm run build:app
 
     - name: Compile to Windows EXE using pkg
-      run: npx pkg . --output dist-exe/ToraDelia-Kiosk.exe
+      run: npx pkg . --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
 
     - name: Commit and Push EXE to Repository
       run: |
