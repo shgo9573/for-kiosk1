@@ -1,3 +1,9 @@
+console.log('');
+console.log('=====================================================');
+console.log('       עמדת תורה דיליה - Kiosk Server');
+console.log('=====================================================');
+console.log('[1/4] טוען את המערכת...');
+
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -357,12 +363,14 @@ app.post('/api/local-folder-search', async (req, res) => {
 });
 
 process.on('uncaughtException', (err) => {
+  console.error('[שגיאה קריטית בתוכנה]:', err);
   try {
     fs.appendFileSync(path.join(process.cwd(), 'kiosk-error.log'), `[${new Date().toISOString()}] Uncaught: ${err.stack || err}\n`);
   } catch {}
 });
 
 process.on('unhandledRejection', (err: any) => {
+  console.error('[שגיאת מערכת בלתי צפויה]:', err);
   try {
     fs.appendFileSync(path.join(process.cwd(), 'kiosk-error.log'), `[${new Date().toISOString()}] Rejection: ${err?.stack || err}\n`);
   } catch {}
@@ -389,7 +397,7 @@ if ((process as any).pkg) {
 
 function launchKioskApp(listenPort: number) {
   const url = `http://localhost:${listenPort}`;
-  console.log(`[2/3] Searching for Microsoft Edge / Google Chrome...`);
+  console.log(`[3/4] מאתר דפדפן לפתיחת חלון העמדה...`);
 
   import('child_process').then(({ spawn, exec }) => {
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
@@ -415,18 +423,19 @@ function launchKioskApp(listenPort: number) {
     });
 
     if (edgePath) {
-      console.log(`[+] Found Microsoft Edge at: ${edgePath}`);
-      console.log(`[3/3] Opening Kiosk application window via Edge...`);
+      console.log(`[+] נמצא Microsoft Edge בנתיב: ${edgePath}`);
+      console.log(`[4/4] פותח את חלון העמדה (Edge App Mode)...`);
       try {
         const edgeProc = spawn(edgePath, [`--app=${url}`, '--new-window'], {
           detached: true,
           stdio: 'ignore',
         });
         edgeProc.unref();
-        console.log(`[SUCCESS] Kiosk window opened!`);
+        console.log(`[V] חלון העמדה נפתח בהצלחה!`);
+        console.log(`    (ניתן למזער חלון שחור זה, העמדה תפעל ברקע)`);
         return;
       } catch (e) {
-        console.error(`[-] Failed to spawn Edge directly:`, e);
+        console.error(`[-] שגיאה בפתיחת Edge:`, e);
       }
     }
 
@@ -435,54 +444,54 @@ function launchKioskApp(listenPort: number) {
     });
 
     if (chromePath) {
-      console.log(`[+] Found Google Chrome at: ${chromePath}`);
-      console.log(`[3/3] Opening Kiosk application window via Chrome...`);
+      console.log(`[+] נמצא Google Chrome בנתיב: ${chromePath}`);
+      console.log(`[4/4] פותח את חלון העמדה (Chrome App Mode)...`);
       try {
         const chromeProc = spawn(chromePath, [`--app=${url}`, '--new-window'], {
           detached: true,
           stdio: 'ignore',
         });
         chromeProc.unref();
-        console.log(`[SUCCESS] Kiosk window opened!`);
+        console.log(`[V] חלון העמדה נפתח בהצלחה!`);
+        console.log(`    (ניתן למזער חלון שחור זה, העמדה תפעל ברקע)`);
         return;
       } catch (e) {
-        console.error(`[-] Failed to spawn Chrome directly:`, e);
+        console.error(`[-] שגיאה בפתיחת Chrome:`, e);
       }
     }
 
-    console.log(`[3/3] Opening via Windows default browser...`);
+    console.log(`[4/4] פותח באמצעות דפדפן ברירת המחדל...`);
     exec(`cmd /c start "" "${url}"`, (cmdErr) => {
       if (cmdErr) {
-        console.log(`[Fallback] Trying explorer "${url}"...`);
+        console.log(`[גיבוי] פותח באמצעות explorer "${url}"...`);
         exec(`explorer "${url}"`);
       } else {
-        console.log(`[SUCCESS] Browser opened successfully!`);
+        console.log(`[V] דפדפן ברירת המחדל נפתח בהצלחה!`);
       }
     });
   }).catch((err) => {
-    console.error(`[-] Error in launchKioskApp:`, err);
+    console.error(`[-] שגיאה בפונקציית פתיחת הדפדפן:`, err);
   });
 }
 
-function findPort(startPort: number): Promise<number> {
-  return new Promise((resolve) => {
-    import('net').then(({ default: net }) => {
-      function test(p: number) {
-        const server = net.createServer();
-        server.once('error', (err: any) => {
-          if (err.code === 'EADDRINUSE') {
-            test(p + 1);
-          } else {
-            resolve(p);
-          }
-        });
-        server.once('listening', () => {
-          server.close(() => resolve(p));
-        });
-        server.listen(p, '0.0.0.0');
-      }
-      test(startPort);
-    }).catch(() => resolve(startPort));
+function startListening(startPort: number, maxAttempts = 10) {
+  const currentPort = startPort;
+  console.log(`[2/4] מאזין לחיבורים בפורט ${currentPort}...`);
+
+  const server = app.listen(currentPort, '127.0.0.1');
+
+  server.once('error', (err: any) => {
+    if (err.code === 'EADDRINUSE' && maxAttempts > 0) {
+      console.log(`[!] פורט ${currentPort} תפוס, מנסה את פורט ${currentPort + 1}...`);
+      startListening(currentPort + 1, maxAttempts - 1);
+    } else {
+      console.error('[X] שגיאה בהפעלת השרת:', err.message || err);
+    }
+  });
+
+  server.once('listening', () => {
+    console.log(`[V] השרת המקומי פועל בהצלחה בכתובת: http://localhost:${currentPort}`);
+    launchKioskApp(currentPort);
   });
 }
 
@@ -506,6 +515,7 @@ async function startServer() {
       try { return fs.existsSync(path.join(dir, 'index.html')); } catch { return false; }
     }) || path.resolve(currentDirname, 'dist');
 
+    console.log(`[info] נתיב קבצי ממשק: ${staticDir}`);
     app.use(express.static(staticDir));
     app.get('*', (req, res) => {
       const indexPath = path.join(staticDir, 'index.html');
@@ -520,16 +530,7 @@ async function startServer() {
     });
   }
 
-  const activePort = await findPort(port);
-
-  app.listen(activePort, '0.0.0.0', () => {
-    console.log('=====================================================');
-    console.log('   עמדת תורה דיליה - Kiosk Server');
-    console.log('=====================================================');
-    console.log(`[1/3] שרת מקומי פעיל ומאזין בכתובת: http://localhost:${activePort}`);
-    console.log(`[info] Static assets directory: ${staticDir}`);
-    launchKioskApp(activePort);
-  });
+  startListening(port);
 }
 
 startServer();
