@@ -9,6 +9,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import vm from 'vm';
+import { spawn, exec } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
@@ -400,7 +401,7 @@ function launchKioskApp(listenPort: number) {
   const url = `http://localhost:${listenPort}`;
   console.log(`[3/4] מאתר דפדפן לפתיחת חלון העמדה...`);
 
-  import('child_process').then(({ spawn, exec }) => {
+  try {
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
     const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
     const localAppData = process.env['LOCALAPPDATA'] || '';
@@ -470,9 +471,9 @@ function launchKioskApp(listenPort: number) {
         console.log(`[V] דפדפן ברירת המחדל נפתח בהצלחה!`);
       }
     });
-  }).catch((err) => {
+  } catch (err) {
     console.error(`[-] שגיאה בפונקציית פתיחת הדפדפן:`, err);
-  });
+  }
 }
 
 function startListening(startPort: number, maxAttempts = 30) {
