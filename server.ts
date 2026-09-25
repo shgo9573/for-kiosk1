@@ -5,6 +5,7 @@ console.log('=====================================================');
 console.log('[1/4] טוען את המערכת...');
 
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import vm from 'vm';
@@ -474,24 +475,28 @@ function launchKioskApp(listenPort: number) {
   });
 }
 
-function startListening(startPort: number, maxAttempts = 10) {
-  const currentPort = startPort;
-  console.log(`[2/4] מאזין לחיבורים בפורט ${currentPort}...`);
+function startListening(startPort: number, maxAttempts = 30) {
+  console.log(`[2/4] בודק זמינות ומאזין בפורט ${startPort}...`);
 
-  const server = app.listen(currentPort, '127.0.0.1');
+  const server = http.createServer(app);
 
-  server.once('error', (err: any) => {
-    if (err.code === 'EADDRINUSE' && maxAttempts > 0) {
-      console.log(`[!] פורט ${currentPort} תפוס, מנסה את פורט ${currentPort + 1}...`);
-      startListening(currentPort + 1, maxAttempts - 1);
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[!] פורט ${startPort} תפוס ע"י הפעלה קודמת ברקע. עובר אוטומטית לפורט ${startPort + 1}...`);
+      server.close();
+      if (maxAttempts > 0) {
+        setTimeout(() => startListening(startPort + 1, maxAttempts - 1), 50);
+      } else {
+        console.error('[X] לא נמצא פורט פנוי מתוך 30 נסיונות.');
+      }
     } else {
-      console.error('[X] שגיאה בהפעלת השרת:', err.message || err);
+      console.error('[X] שגיאה ברשת:', err);
     }
   });
 
-  server.once('listening', () => {
-    console.log(`[V] השרת המקומי פועל בהצלחה בכתובת: http://localhost:${currentPort}`);
-    launchKioskApp(currentPort);
+  server.listen(startPort, '127.0.0.1', () => {
+    console.log(`[V] השרת המקומי פועל בהצלחה בכתובת: http://localhost:${startPort}`);
+    launchKioskApp(startPort);
   });
 }
 
