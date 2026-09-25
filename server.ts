@@ -389,7 +389,7 @@ if ((process as any).pkg) {
 
 function launchKioskApp(listenPort: number) {
   const url = `http://localhost:${listenPort}`;
-  if (process.platform !== 'win32' && !(process as any).pkg) return;
+  console.log(`[2/3] Searching for Microsoft Edge / Google Chrome...`);
 
   import('child_process').then(({ spawn, exec }) => {
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
@@ -415,14 +415,19 @@ function launchKioskApp(listenPort: number) {
     });
 
     if (edgePath) {
+      console.log(`[+] Found Microsoft Edge at: ${edgePath}`);
+      console.log(`[3/3] Opening Kiosk application window via Edge...`);
       try {
         const edgeProc = spawn(edgePath, [`--app=${url}`, '--new-window'], {
           detached: true,
           stdio: 'ignore',
         });
         edgeProc.unref();
+        console.log(`[SUCCESS] Kiosk window opened!`);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.error(`[-] Failed to spawn Edge directly:`, e);
+      }
     }
 
     const chromePath = chromeCandidates.find((p) => {
@@ -430,24 +435,33 @@ function launchKioskApp(listenPort: number) {
     });
 
     if (chromePath) {
+      console.log(`[+] Found Google Chrome at: ${chromePath}`);
+      console.log(`[3/3] Opening Kiosk application window via Chrome...`);
       try {
         const chromeProc = spawn(chromePath, [`--app=${url}`, '--new-window'], {
           detached: true,
           stdio: 'ignore',
         });
         chromeProc.unref();
+        console.log(`[SUCCESS] Kiosk window opened!`);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.error(`[-] Failed to spawn Chrome directly:`, e);
+      }
     }
 
-    // PowerShell fallback (resolves system browser with Windows Shell)
-    const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process '${url}'"`;
-    exec(psCmd, (err) => {
-      if (err) {
-        exec(`cmd /c start "" "${url}"`);
+    console.log(`[3/3] Opening via Windows default browser...`);
+    exec(`cmd /c start "" "${url}"`, (cmdErr) => {
+      if (cmdErr) {
+        console.log(`[Fallback] Trying explorer "${url}"...`);
+        exec(`explorer "${url}"`);
+      } else {
+        console.log(`[SUCCESS] Browser opened successfully!`);
       }
     });
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error(`[-] Error in launchKioskApp:`, err);
+  });
 }
 
 function findPort(startPort: number): Promise<number> {
@@ -473,6 +487,7 @@ function findPort(startPort: number): Promise<number> {
 }
 
 async function startServer() {
+  let staticDir = '';
   if (!isProd && !(process as any).pkg) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -487,7 +502,7 @@ async function startServer() {
       path.join(process.cwd(), 'dist'),
       path.join(process.cwd()),
     ];
-    const staticDir = candidates.find((dir) => {
+    staticDir = candidates.find((dir) => {
       try { return fs.existsSync(path.join(dir, 'index.html')); } catch { return false; }
     }) || path.resolve(currentDirname, 'dist');
 
@@ -508,10 +523,12 @@ async function startServer() {
   const activePort = await findPort(port);
 
   app.listen(activePort, '0.0.0.0', () => {
-    console.log(`[Kiosk Server] Listening on http://0.0.0.0:${activePort}`);
-    if (process.platform === 'win32' || (process as any).pkg) {
-      launchKioskApp(activePort);
-    }
+    console.log('=====================================================');
+    console.log('   עמדת תורה דיליה - Kiosk Server');
+    console.log('=====================================================');
+    console.log(`[1/3] שרת מקומי פעיל ומאזין בכתובת: http://localhost:${activePort}`);
+    console.log(`[info] Static assets directory: ${staticDir}`);
+    launchKioskApp(activePort);
   });
 }
 

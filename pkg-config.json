@@ -1,0 +1,8 @@
+{
+  "pkg": {
+    "assets": [
+      "dist/index.html",
+      "dist/assets/**/*"
+    ]
+  }
+}

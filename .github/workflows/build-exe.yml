@@ -25,17 +25,8 @@ jobs:
     - name: Build Web App & Bundle Server
       run: npm run build:app
 
-    - name: Compile to Windows EXE using pkg
-      run: npx pkg . --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
-
-    - name: Patch EXE to Native Windows GUI Subsystem (No Console Window)
-      run: node scripts/make-gui-exe.cjs dist-exe/ToraDelia-Kiosk.exe
-
-    - name: Install UPX Compressor
-      run: choco install upx --no-progress
-
-    - name: Compress EXE with UPX (Reduce size to ~45MB)
-      run: upx --best dist-exe/ToraDelia-Kiosk.exe
+    - name: Compile Windows EXE with Brotli Compression (~45MB)
+      run: npx pkg dist/server.cjs --config pkg-config.json -C Brotli --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
 
     - name: Compress EXE to ZIP
       shell: pwsh
@@ -56,11 +47,12 @@ jobs:
         tag_name: latest
         name: "גרסה אחרונה להורדה (Latest Windows Kiosk)"
         body: |
-          קובץ EXE מוכן להרצה של עמדת תורה דיליה עבור Windows (דחוס עם UPX לגודל של ~45MB).
+          עמדת תורה דיליה עבור Windows - גרסה עצמאית עם חלון לוגים מפורט ומכווצת (כ-45MB בלבד!).
           
-          ### קבצים להורדה ישירה:
-          - **ToraDelia-Kiosk.exe**: קובץ הפעלה עצמאי ישיר (מכווץ עם UPX, רץ כתוכנת שולחן עבודה נקייה ללא שום חלון שחור!).
-          - **ToraDelia-Kiosk-Windows.zip**: קובץ ה-EXE דחוס להורדה מהירה במיוחד.
+          ### הוראות הפעלה:
+          1. הורידו את **ToraDelia-Kiosk.exe** (או את קובץ ה-ZIP).
+          2. לחצו לחיצה כפולה על **ToraDelia-Kiosk.exe**.
+          3. ייפתח חלון קונסולה עם לוגים מפורטים המציגים כל שלב (שרת, איתור דפדפן, פתיחת העמדה) וייפתח חלון העמדה.
         files: |
           dist-exe/ToraDelia-Kiosk.exe
           dist-exe/ToraDelia-Kiosk-Windows.zip
