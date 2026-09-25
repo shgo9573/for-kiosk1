@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, FolderCheck } from 'lucide-react';
 import { KioskConfig } from '../types';
+import { TorahLogo } from './TorahLogo';
 
 interface HeaderProps {
   config: KioskConfig;
@@ -39,14 +40,12 @@ export const Header: React.FC<HeaderProps> = ({ config }) => {
     <header className="bg-[#0f1d38] border-b-2 border-[#c59b27] px-8 py-3.5 flex items-center justify-between text-white select-none shadow-md z-30">
       {/* Brand & Software Title */}
       <div className="flex items-center gap-3.5">
-        <div className="w-10 h-10 rounded bg-[#16274a] border border-[#c59b27]/60 flex items-center justify-center text-[#d4af37] font-serif font-black text-lg shadow-inner">
-          ת״ד
-        </div>
+        <TorahLogo size="sm" />
         <div>
           <h1 className="text-lg font-bold tracking-tight text-white font-serif leading-tight">
             תורה דיליה
           </h1>
-          <p className="text-[11px] text-slate-300 font-medium">
+          <p className="text-[11px] text-amber-200/90 font-medium">
             עמדת קליטה והדפסת מסמכים
           </p>
         </div>
