@@ -28,6 +28,8 @@ export interface KioskConfig {
   targetDriveLetter: string; // e.g. 'D', 'C', 'E', 'F', 'G'
   targetFolderName: string;  // e.g. 'תורה דיליה'
   dDriveTargetPath: string;   // Full path e.g. 'D:\תורה דיליה'
+  fallbackDriveCount: number; // Number of fallback drive letters to scan forward (default: 5)
+  autoDetectRemovableDrive: boolean; // Auto-detect USB flash drive (DriveType=2)
   kioskLockFullscreen: boolean;
 }
 

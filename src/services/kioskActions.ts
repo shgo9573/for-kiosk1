@@ -6,6 +6,8 @@ export interface CopyTargetConfig {
   driveLetter?: string;
   folderName?: string;
   fullPath?: string;
+  fallbackDriveCount?: number;
+  autoDetectRemovable?: boolean;
 }
 
 export class KioskActionService {
@@ -181,6 +183,8 @@ export class KioskActionService {
           driveLetter,
           folderName,
           targetPath: displayTarget,
+          fallbackDriveCount: targetConfig?.fallbackDriveCount ?? 5,
+          autoDetectRemovable: targetConfig?.autoDetectRemovable ?? true,
         }),
       });
 

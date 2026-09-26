@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FolderCheck } from 'lucide-react';
+import { Clock, FolderCheck, Usb } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { TorahLogo } from './TorahLogo';
 
@@ -59,10 +59,27 @@ export const Header: React.FC<HeaderProps> = ({ config }) => {
         </div>
 
         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded bg-[#16274a] border border-slate-700/80 text-slate-200">
-          <FolderCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-slate-300">יעד קבצים: <strong className="font-mono text-white" dir="ltr">{targetPath}</strong></span>
+          {config.autoDetectRemovableDrive !== false ? (
+            <>
+              <Usb className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-300">
+                יעד קבצים:{' '}
+                <strong className="text-emerald-300 font-medium">
+                  דיסק און קי אוטומטי ({config.targetFolderName || 'תורה דיליה'})
+                </strong>
+              </span>
+            </>
+          ) : (
+            <>
+              <FolderCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-300">
+                יעד קבצים: <strong className="font-mono text-white" dir="ltr">{targetPath}</strong>
+              </span>
+            </>
+          )}
         </div>
       </div>
     </header>
   );
 };
+

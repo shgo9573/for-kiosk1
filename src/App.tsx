@@ -24,6 +24,8 @@ const DEFAULT_CONFIG: KioskConfig = {
   targetDriveLetter: 'D',
   targetFolderName: 'תורה דיליה',
   dDriveTargetPath: 'D:\\תורה דיליה',
+  fallbackDriveCount: 5,
+  autoDetectRemovableDrive: true,
   kioskLockFullscreen: true,
 };
 
@@ -39,6 +41,8 @@ export default function App() {
           adminPin: '545454545',
           targetDriveLetter: parsed.targetDriveLetter || 'D',
           targetFolderName: parsed.targetFolderName || 'תורה דיליה',
+          fallbackDriveCount: typeof parsed.fallbackDriveCount === 'number' ? parsed.fallbackDriveCount : 5,
+          autoDetectRemovableDrive: parsed.autoDetectRemovableDrive !== false,
           dDriveTargetPath:
             parsed.dDriveTargetPath ||
             `${parsed.targetDriveLetter || 'D'}:\\${parsed.targetFolderName || 'תורה דיליה'}`,
@@ -187,13 +191,15 @@ export default function App() {
         driveLetter: config.targetDriveLetter || 'D',
         folderName: config.targetFolderName || 'תורה דיליה',
         fullPath: targetDrivePath,
+        fallbackDriveCount: config.fallbackDriveCount ?? 5,
+        autoDetectRemovable: config.autoDetectRemovableDrive ?? true,
       });
       if (res.success) {
         setCopiedFileIds((prev) => new Set(prev).add(file.id));
         addToast({
           type: 'success',
           title: 'הקובץ הועתק בהצלחה',
-          message: `נשמר ב- ${res.path}`,
+          message: res.message || `נשמר ב- ${res.path}`,
           actionType: 'copy',
         });
       } else {
@@ -223,6 +229,7 @@ export default function App() {
 
     const wordFiles = files.filter((f) => f.isWordDoc);
     let successCount = 0;
+    let lastSavedPath = targetDrivePath;
 
     for (const file of wordFiles) {
       try {
@@ -230,10 +237,13 @@ export default function App() {
           driveLetter: config.targetDriveLetter || 'D',
           folderName: config.targetFolderName || 'תורה דיליה',
           fullPath: targetDrivePath,
+          fallbackDriveCount: config.fallbackDriveCount ?? 5,
+          autoDetectRemovable: config.autoDetectRemovableDrive ?? true,
         });
         if (res.success) {
           setCopiedFileIds((prev) => new Set(prev).add(file.id));
           successCount++;
+          if (res.path) lastSavedPath = res.path;
         }
       } catch (err) {
         console.error('Bulk copy error for file:', file.name, err);
@@ -244,7 +254,7 @@ export default function App() {
     addToast({
       type: successCount > 0 ? 'success' : 'error',
       title: 'העתקה מרוכזת',
-      message: `${successCount} מתוך ${wordFiles.length} קבצים הועתקו ל- ${targetDrivePath}`,
+      message: `${successCount} מתוך ${wordFiles.length} קבצים הועתקו בהצלחה`,
       actionType: 'copy',
     });
   };

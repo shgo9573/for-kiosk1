@@ -9,7 +9,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import vm from 'vm';
-import { spawn, exec } from 'child_process';
+import { spawn, exec, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
@@ -20,6 +20,84 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json({ limit: '100mb' }));
+
+// Compute candidate drive letters sequence starting from primaryLetter
+function getDriveSequence(primaryLetter: string = 'D', fallbackCount: number = 5): string[] {
+  const cleanLetter = (primaryLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+  const startCode = cleanLetter.charCodeAt(0);
+  const validStart = startCode >= 65 && startCode <= 90 ? startCode : 68;
+  const count = Math.max(0, Math.min(20, typeof fallbackCount === 'number' ? fallbackCount : 5));
+
+  const sequence: string[] = [];
+  for (let i = 0; i <= count; i++) {
+    const charCode = validStart + i;
+    if (charCode <= 90) {
+      sequence.push(String.fromCharCode(charCode));
+    }
+  }
+  return sequence.length > 0 ? sequence : [cleanLetter];
+}
+
+// Removable USB flash drive detection for Windows
+interface RemovableDriveInfo {
+  letter: string;
+  name: string;
+  isRemovable: boolean;
+}
+
+let cachedRemovableDrives: { timestamp: number; drives: RemovableDriveInfo[] } = {
+  timestamp: 0,
+  drives: [],
+};
+
+function detectWindowsRemovableDrives(): RemovableDriveInfo[] {
+  if (process.platform !== 'win32') {
+    return [{ letter: 'D', name: 'דיסק און קי מדומה (פיתוח)', isRemovable: true }];
+  }
+
+  const now = Date.now();
+  if (now - cachedRemovableDrives.timestamp < 3000) {
+    return cachedRemovableDrives.drives;
+  }
+
+  const results: RemovableDriveInfo[] = [];
+
+  try {
+    // Query Windows for DriveType=2 (Removable Disk / USB Flash Drive)
+    const psCmd = `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 } | Select-Object -Property DeviceID, VolumeName | ConvertTo-Json -Compress"`;
+    const output = execSync(psCmd, { encoding: 'utf8', timeout: 2500 }).trim();
+
+    if (output) {
+      const parsed = JSON.parse(output);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      for (const item of items) {
+        if (item && item.DeviceID) {
+          const letter = String(item.DeviceID).replace(/[^A-Za-z]/g, '').toUpperCase();
+          if (letter) {
+            results.push({
+              letter,
+              name: item.VolumeName ? `${item.VolumeName} (${letter}:)` : `דיסק און קי (${letter}:)`,
+              isRemovable: true,
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Fallback if PowerShell query times out: check typical USB letters D, E, F, G, H, I
+    const candidateLetters = ['E', 'F', 'G', 'H', 'D', 'I', 'J'];
+    for (const d of candidateLetters) {
+      try {
+        if (fs.existsSync(`${d}:\\`)) {
+          results.push({ letter: d, name: `כונן נשלף (${d}:)`, isRemovable: true });
+        }
+      } catch {}
+    }
+  }
+
+  cachedRemovableDrives = { timestamp: now, drives: results };
+  return results;
+}
 
 // Determine target drive path
 function getDriveTargetPath(customPath?: string, driveLetter?: string, folderName?: string): string {
@@ -40,58 +118,188 @@ function getDriveTargetPath(customPath?: string, driveLetter?: string, folderNam
   return path.join(process.cwd(), 'drive_d_sim', `${letter}_${folder}`);
 }
 
+// Get detected removable USB drives
+app.get('/api/removable-drives', (req, res) => {
+  const drives = detectWindowsRemovableDrives();
+  res.json({
+    success: true,
+    drives,
+    count: drives.length,
+  });
+});
+
 // System status check endpoint
 app.get('/api/system-status', (req, res) => {
-  const dPath = getDriveTargetPath();
   const isWindows = process.platform === 'win32';
+  const driveLetter = (String(req.query.driveLetter || 'D')).toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+  const fallbackCount = parseInt(String(req.query.fallbackCount || '5'), 10) || 5;
+  const driveCandidates = getDriveSequence(driveLetter, fallbackCount);
+  const removableDrives = detectWindowsRemovableDrives();
+
   let dDriveAccessible = false;
+  const accessibleDrives: string[] = [];
 
   try {
     if (isWindows) {
-      dDriveAccessible = fs.existsSync('D:\\');
+      for (const d of driveCandidates) {
+        try {
+          if (fs.existsSync(`${d}:\\`)) {
+            accessibleDrives.push(d);
+            if (d === driveLetter) dDriveAccessible = true;
+          }
+        } catch {}
+      }
+      if (accessibleDrives.length > 0 && !dDriveAccessible) {
+        dDriveAccessible = true; // Accessible via fallback
+      }
+      if (removableDrives.length > 0) {
+        dDriveAccessible = true;
+      }
     } else {
       dDriveAccessible = true; // simulated in development
+      accessibleDrives.push(driveLetter);
     }
   } catch {
     dDriveAccessible = false;
   }
 
+  const dPath = getDriveTargetPath(undefined, driveLetter);
+
   res.json({
     platform: process.platform,
     isWindows,
     targetDirectory: dPath,
+    primaryDrive: driveLetter,
     dDriveAccessible,
+    accessibleDrives,
+    removableDrives,
+    driveSequence: driveCandidates,
     kioskMode: true,
   });
 });
 
-// Copy file directly to configured drive/path without prompting the user
+// Copy file directly to configured drive/path with automatic fallback scanning
 app.post('/api/copy-to-d', async (req, res) => {
   try {
-    const { fileName, fileBase64, studentId, targetPath, driveLetter, folderName } = req.body;
+    const { fileName, fileBase64, studentId, targetPath, driveLetter, folderName, fallbackDriveCount, autoDetectRemovable } = req.body;
     if (!fileName || !fileBase64) {
       return res.status(400).json({ success: false, error: 'שם קובץ ותוכן נדרשים' });
     }
 
-    const targetDir = getDriveTargetPath(targetPath, driveLetter, folderName);
+    const safeFileName = path.basename(fileName);
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const folder = (folderName && folderName.trim()) || 'תורה דיליה';
+    const primaryLetter = (driveLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+    const fallbackCount = typeof fallbackDriveCount === 'number' ? fallbackDriveCount : 5;
+    const shouldAutoDetect = autoDetectRemovable !== false;
+
+    // In Windows: first check for any connected Removable USB drives (if auto-detect enabled),
+    // then check primary drive and fallback sequence
+    if (process.platform === 'win32') {
+      const driveCandidates: string[] = [];
+
+      // 1. If autoDetect is enabled, prioritize all detected USB removable drives
+      if (shouldAutoDetect) {
+        const removables = detectWindowsRemovableDrives();
+        for (const rem of removables) {
+          if (!driveCandidates.includes(rem.letter)) {
+            driveCandidates.push(rem.letter);
+          }
+        }
+      }
+
+      // 2. Add primary drive and standard forward sequence
+      const forwardSeq = getDriveSequence(primaryLetter, fallbackCount);
+      for (const d of forwardSeq) {
+        if (!driveCandidates.includes(d)) {
+          driveCandidates.push(d);
+        }
+      }
+
+      let savedPath = '';
+      let savedDrive = '';
+      let savedDir = '';
+      let isRemovableDrive = false;
+      const attemptedDrives: string[] = [];
+
+      for (const letter of driveCandidates) {
+        attemptedDrives.push(letter);
+        const driveRoot = `${letter}:\\`;
+        const targetDir = `${letter}:\\${folder}`;
+        const targetFilePath = path.join(targetDir, safeFileName);
+
+        try {
+          if (fs.existsSync(driveRoot) || driveCandidates.length === 1) {
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true });
+            }
+            fs.writeFileSync(targetFilePath, buffer);
+            savedPath = targetFilePath;
+            savedDrive = letter;
+            savedDir = targetDir;
+            
+            const removables = detectWindowsRemovableDrives();
+            isRemovableDrive = removables.some((r) => r.letter === letter);
+
+            console.log(`[Kiosk] Copied "${safeFileName}" (${buffer.length} bytes) to ${targetFilePath} (Drive ${letter}:, Removable: ${isRemovableDrive})`);
+            break;
+          }
+        } catch (driveErr) {
+          console.warn(`[Kiosk] Could not write to drive ${letter}:`, driveErr);
+        }
+      }
+
+      if (savedPath) {
+        const isFallback = savedDrive !== primaryLetter;
+        let message = `הקובץ הועתק בהצלחה לדיסק און קי (${savedPath})`;
+        if (isRemovableDrive) {
+          message = `הקובץ נשמר בהצלחה בדיסק און קי (כונן ${savedDrive}:)`;
+        } else if (isFallback) {
+          message = `הקובץ הועתק בהצלחה לכונן ${savedDrive}: (${savedPath})`;
+        } else {
+          message = `הקובץ הועתק בהצלחה לנתיב ${savedPath}`;
+        }
+
+        return res.json({
+          success: true,
+          path: savedPath,
+          targetDir: savedDir,
+          driveLetter: savedDrive,
+          primaryDrive: primaryLetter,
+          isFallback,
+          isRemovable: isRemovableDrive,
+          fileName: safeFileName,
+          size: buffer.length,
+          message,
+        });
+      }
+
+      // If all candidate drives failed
+      return res.status(400).json({
+        success: false,
+        error: `לא נמצא דיסק און קי או כונן זמין לכתיבה. נבדקו הכוננים: ${attemptedDrives.map((d) => d + ':').join(', ')}. אנא חבר דיסק און קי למחשב ונסה שוב.`,
+      });
+    }
+
+    // Dev / non-windows fallback
+    const targetDir = getDriveTargetPath(targetPath, primaryLetter, folder);
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
-
-    const safeFileName = path.basename(fileName);
     const targetFilePath = path.join(targetDir, safeFileName);
-    const buffer = Buffer.from(fileBase64, 'base64');
-
     fs.writeFileSync(targetFilePath, buffer);
-    console.log(`[Kiosk] Copied file "${safeFileName}" (${buffer.length} bytes) to ${targetFilePath}`);
 
     return res.json({
       success: true,
       path: targetFilePath,
       targetDir,
+      driveLetter: primaryLetter,
+      primaryDrive: primaryLetter,
+      isFallback: false,
+      isRemovable: true,
       fileName: safeFileName,
       size: buffer.length,
-      message: `הקובץ הועתק בהצלחה לנתיב ${targetDir}\\${safeFileName}`,
+      message: `הקובץ הועתק בהצלחה לדיסק און קי (${targetDir}\\${safeFileName})`,
     });
   } catch (error: any) {
     console.error('Error copying file to drive:', error);
@@ -357,80 +565,116 @@ app.get('/api/drive-thumbnail', async (req, res) => {
   }
 });
 
-// Local or Synced folder search
+// Local or Synced folder search with fallback drive scanning
 app.post('/api/local-folder-search', async (req, res) => {
   try {
-    const { studentId, rootPath } = req.body;
+    const { studentId, rootPath, driveLetter, folderName, fallbackDriveCount } = req.body;
     if (!studentId) {
       return res.status(400).json({ error: 'studentId is required' });
     }
 
-    const searchPath = rootPath && fs.existsSync(rootPath) ? rootPath : null;
-    if (!searchPath) {
-      return res.json({ found: false, files: [] });
+    const cleanId = String(studentId).trim();
+    const folder = (folderName && String(folderName).trim()) || 'תורה דיליה';
+    const primaryLetter = (driveLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+    const fallbackCount = typeof fallbackDriveCount === 'number' ? fallbackDriveCount : 5;
+
+    const candidatePaths: string[] = [];
+    if (rootPath && typeof rootPath === 'string' && rootPath.trim()) {
+      candidatePaths.push(rootPath.trim());
     }
 
-    const entries = fs.readdirSync(searchPath, { withFileTypes: true });
-    const matchingDir = entries.find(
-      (e) => e.isDirectory() && (e.name.trim() === studentId.trim() || e.name.includes(studentId.trim()))
-    );
-
-    if (!matchingDir) {
-      return res.json({ found: false, files: [] });
+    if (process.platform === 'win32') {
+      const driveCandidates = getDriveSequence(primaryLetter, fallbackCount);
+      for (const d of driveCandidates) {
+        candidatePaths.push(`${d}:\\${folder}`);
+        candidatePaths.push(`${d}:\\`);
+      }
+    } else {
+      candidatePaths.push(path.join(process.cwd(), 'drive_d_sim', `${primaryLetter}_${folder}`));
+      candidatePaths.push(path.join(process.cwd(), 'drive_d_sim'));
     }
 
-    const dirPath = path.join(searchPath, matchingDir.name);
-    const fileEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+    // Filter existing directories
+    const existingSearchPaths = candidatePaths.filter((p) => {
+      try {
+        return fs.existsSync(p) && fs.statSync(p).isDirectory();
+      } catch {
+        return false;
+      }
+    });
 
     const mammoth = await import('mammoth').catch(() => null);
 
-    const files = await Promise.all(
-      fileEntries
-        .filter((f) => f.isFile())
-        .map(async (f) => {
-          const filePath = path.join(dirPath, f.name);
-          const stats = fs.statSync(filePath);
-          const buffer = fs.readFileSync(filePath);
-          const base64 = buffer.toString('base64');
-          const lower = f.name.toLowerCase();
-          const isWord = lower.endsWith('.docx') || lower.endsWith('.doc');
-          let previewHtml: string | undefined;
-          let snippet: string | undefined;
+    for (const searchPath of existingSearchPaths) {
+      try {
+        const entries = fs.readdirSync(searchPath, { withFileTypes: true });
+        const matchingDir = entries.find(
+          (e) =>
+            e.isDirectory() &&
+            (e.name.trim() === cleanId ||
+              e.name.trim().startsWith(cleanId) ||
+              e.name.includes(cleanId))
+        );
 
-          if (lower.endsWith('.docx') && mammoth) {
-            try {
-              const mRes = await mammoth.convertToHtml({ buffer });
-              if (mRes.value && mRes.value.trim().length > 0) {
-                previewHtml = mRes.value;
-                const tRes = await mammoth.extractRawText({ buffer });
-                snippet = tRes.value.slice(0, 200);
-              }
-            } catch (mErr) {
-              console.warn('Mammoth preview extraction error:', mErr);
-            }
-          }
+        if (matchingDir) {
+          const dirPath = path.join(searchPath, matchingDir.name);
+          const fileEntries = fs.readdirSync(dirPath, { withFileTypes: true });
 
-          return {
-            id: 'local_' + f.name,
-            name: f.name,
-            mimeType: isWord
-              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              : 'application/octet-stream',
-            size: stats.size,
-            modifiedTime: stats.mtime.toISOString(),
-            isWordDoc: isWord,
-            base64Data: base64,
-            previewHtml,
-            snippet,
-          };
-        })
-    );
+          const files = await Promise.all(
+            fileEntries
+              .filter((f) => f.isFile())
+              .map(async (f) => {
+                const filePath = path.join(dirPath, f.name);
+                const stats = fs.statSync(filePath);
+                const buffer = fs.readFileSync(filePath);
+                const base64 = buffer.toString('base64');
+                const lower = f.name.toLowerCase();
+                const isWord = lower.endsWith('.docx') || lower.endsWith('.doc');
+                let previewHtml: string | undefined;
+                let snippet: string | undefined;
 
-    return res.json({
-      found: true,
-      folder: { id: matchingDir.name, name: matchingDir.name },
-      files,
-    });
+                if (lower.endsWith('.docx') && mammoth) {
+                  try {
+                    const mRes = await mammoth.convertToHtml({ buffer });
+                    if (mRes.value && mRes.value.trim().length > 0) {
+                      previewHtml = mRes.value;
+                      const tRes = await mammoth.extractRawText({ buffer });
+                      snippet = tRes.value.slice(0, 200);
+                    }
+                  } catch (mErr) {
+                    console.warn('Mammoth preview extraction error:', mErr);
+                  }
+                }
+
+                return {
+                  id: 'local_' + f.name,
+                  name: f.name,
+                  mimeType: isWord
+                    ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    : 'application/octet-stream',
+                  size: stats.size,
+                  modifiedTime: stats.mtime.toISOString(),
+                  isWordDoc: isWord,
+                  base64Data: base64,
+                  previewHtml,
+                  snippet,
+                };
+              })
+          );
+
+          return res.json({
+            found: true,
+            folder: { id: matchingDir.name, name: matchingDir.name },
+            files,
+            searchPath,
+          });
+        }
+      } catch (searchErr) {
+        console.warn(`Error searching in ${searchPath}:`, searchErr);
+      }
+    }
+
+    return res.json({ found: false, files: [] });
   } catch (err: any) {
     console.error('Local folder search error:', err);
     return res.status(500).json({ error: err.message });

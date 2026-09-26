@@ -6,10 +6,16 @@ import {
   FolderOpen,
   CheckCircle2,
   AlertCircle,
+  Layers,
+  ArrowLeft,
+  Usb,
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { GoogleDriveService } from '../services/googleDrive';
 import { googleSignIn, logout } from '../services/firebaseAuth';
+import { getDriveSequence } from '../utils/driveHelpers';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -19,6 +25,12 @@ interface AdminModalProps {
   isDriveConnected: boolean;
   userEmail?: string | null;
   onDriveStateChanged: () => void;
+}
+
+interface DetectedUsbDrive {
+  letter: string;
+  name: string;
+  isRemovable: boolean;
 }
 
 const REQUIRED_PIN = '545454545';
@@ -46,11 +58,35 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Target Drive and Folder settings
   const [targetDriveLetter, setTargetDriveLetter] = useState(config.targetDriveLetter || 'D');
   const [targetFolderName, setTargetFolderName] = useState(config.targetFolderName || 'תורה דיליה');
+  const [fallbackDriveCount, setFallbackDriveCount] = useState<number>(
+    typeof config.fallbackDriveCount === 'number' ? config.fallbackDriveCount : 5
+  );
+  const [autoDetectRemovableDrive, setAutoDetectRemovableDrive] = useState<boolean>(
+    config.autoDetectRemovableDrive !== false
+  );
+
+  const [detectedUsbDrives, setDetectedUsbDrives] = useState<DetectedUsbDrive[]>([]);
+  const [isRefreshingUsb, setIsRefreshingUsb] = useState(false);
 
   const [, setDriveFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [, setIsLoadingFolders] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const refreshUsbDrives = async () => {
+    setIsRefreshingUsb(true);
+    try {
+      const res = await fetch('/api/removable-drives');
+      if (res.ok) {
+        const data = await res.json();
+        setDetectedUsbDrives(data.drives || []);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setIsRefreshingUsb(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -63,6 +99,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setMode(config.mode);
       setTargetDriveLetter(config.targetDriveLetter || 'D');
       setTargetFolderName(config.targetFolderName || 'תורה דיליה');
+      setFallbackDriveCount(
+        typeof config.fallbackDriveCount === 'number' ? config.fallbackDriveCount : 5
+      );
+      setAutoDetectRemovableDrive(config.autoDetectRemovableDrive !== false);
+      refreshUsbDrives();
     }
   }, [isOpen, config]);
 
@@ -71,6 +112,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     if (pinInput.trim() === REQUIRED_PIN) {
       setIsAuthenticated(true);
       setPinError(false);
+      refreshUsbDrives();
       if (isDriveConnected) {
         loadFolders();
       }
@@ -113,6 +155,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   const computedTargetPath = `${targetDriveLetter.toUpperCase()}:\\${targetFolderName.trim() || 'תורה דיליה'}`;
+  const driveSequence = getDriveSequence(targetDriveLetter, fallbackDriveCount);
 
   const handleSave = () => {
     onSaveConfig({
@@ -125,6 +168,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       targetDriveLetter: targetDriveLetter.toUpperCase(),
       targetFolderName: targetFolderName.trim() || 'תורה דיליה',
       dDriveTargetPath: computedTargetPath,
+      fallbackDriveCount,
+      autoDetectRemovableDrive,
     });
     setSaveSuccess(true);
     setTimeout(() => {
@@ -207,19 +252,84 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           /* Authenticated Settings Form */
           <div className="space-y-4">
             {/* 1. Target Drive & Folder Selection (בחירת כונן ותיקייה) */}
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
-              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-emerald-700" />
-                <span>כונן יעד להעתקת קבצים (דיסק מקומי)</span>
-              </h4>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                בחר את אות הכונן (C, D, E, F וכו') ואת שם התיקייה שאליה יועתקו הקבצים ישירות.
-              </p>
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                  <Usb className="w-4 h-4 text-emerald-700" />
+                  <span>יעד שמירת קבצים והעתקה לדיסק און קי</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={refreshUsbDrives}
+                  disabled={isRefreshingUsb}
+                  className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer transition"
+                  title="רענן מצב כוננים מחוברים"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshingUsb ? 'animate-spin text-emerald-600' : ''}`} />
+                  <span>רענן כוננים</span>
+                </button>
+              </div>
 
-              {/* Drive Letter Selector */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  אות כונן במחשב:
+              {/* Automatic USB Plug & Play Card */}
+              <div
+                onClick={() => setAutoDetectRemovableDrive(!autoDetectRemovableDrive)}
+                className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-start justify-between gap-3 ${
+                  autoDetectRemovableDrive
+                    ? 'bg-emerald-50/90 border-emerald-500/80 shadow-xs'
+                    : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="text-xs font-bold text-slate-900">
+                      זיהוי אוטומטי של דיסק און קי (Plug & Play) - מומלץ
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-700 text-white px-1.5 py-0.5 rounded">
+                      אוטומטי
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    המערכת מזהה אוטומטית איזה דיסק און קי מחובר ברגע זה למחשב (גם אם קיבל אות E:, F:, G:, D:) ושומרת ישירות אליו ללא צורך בהגדרה ידנית!
+                  </p>
+                  
+                  {/* Live Detected USB status */}
+                  <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                    {detectedUsbDrives.length > 0 ? (
+                      detectedUsbDrives.map((d) => (
+                        <span
+                          key={d.letter}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-bold text-[11px] border border-emerald-300"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>דיסק און קי מזוהה: <strong>{d.name} ({d.letter}:)</strong></span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[11px] border border-amber-200">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>לא זוהה דיסק און קי כעת (בחיבור דיסק און קי הוא יזוהה מיד)</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-0.5 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={autoDetectRemovableDrive}
+                    onChange={(e) => setAutoDetectRemovableDrive(e.target.checked)}
+                    className="w-5 h-5 text-emerald-600 rounded cursor-pointer accent-emerald-700"
+                  />
+                </div>
+              </div>
+
+              {/* Manual / Fallback Drive Letter Selector */}
+              <div className="pt-1 space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  {autoDetectRemovableDrive
+                    ? 'כונן גיבוי / ברירת מחדל (אם לא מחובר דיסק און קי):'
+                    : 'אות כונן ידנית קבועה:'}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {COMMON_DRIVES.map((letter) => {
@@ -245,7 +355,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               {/* Target Folder Name Input */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                  שם תיקיית היעד בכונן:
+                  שם תיקיית היעד בדיסק און קי / כונן:
                 </label>
                 <input
                   type="text"
@@ -256,9 +366,77 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 />
               </div>
 
+              {/* Fallback Drive Letters Scanning (סריקת אותיות כונן נוספות) */}
+              <div className="pt-2 border-t border-slate-200/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-amber-700" />
+                    <span>סריקת כוננים חלופיים / דיסק און קי במקרה של כשל:</span>
+                  </label>
+                  <span className="text-[11px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                    {fallbackDriveCount > 0 ? `+${fallbackDriveCount} אותיות קדימה` : 'ראשי בלבד'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  אם כונן היעד (למשל <strong className="text-slate-800 font-mono">{targetDriveLetter}:</strong>) אינו מחובר או לא זמין, המערכת תנסה לשמור/לאתר קבצים אוטומטית בכוננים הבאים (למשל דיסק און קי שקיבל אות כונן אחרת).
+                </p>
+
+                {/* Quick Select Buttons */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-600 font-medium">כמות אותיות:</span>
+                  {[0, 3, 5, 8, 10].map((num) => {
+                    const isSelected = fallbackDriveCount === num;
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setFallbackDriveCount(num)}
+                        className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-[#0f1d38] text-white border-[#0f1d38] shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {num === 0 ? '0 (ללא)' : num === 5 ? '5 (מומלץ)' : num}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Live Sequence Badges */}
+                <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200/80">
+                  <div className="text-[10px] font-bold text-amber-900 mb-1.5 flex items-center gap-1">
+                    <span>סדר סריקת הכוננים בפועל:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5" dir="ltr">
+                    {driveSequence.map((letter, idx) => {
+                      const isPrimary = idx === 0;
+                      return (
+                        <React.Fragment key={letter}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-mono font-bold border flex items-center gap-1 ${
+                              isPrimary
+                                ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                                : 'bg-white text-slate-800 border-slate-300'
+                            }`}
+                          >
+                            <span>{letter}:</span>
+                            {isPrimary && <span className="text-[9px] font-sans opacity-90">(ראשי)</span>}
+                          </span>
+                          {idx < driveSequence.length - 1 && (
+                            <span className="text-slate-400 text-xs font-bold">➔</span>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* Live Target Path Preview */}
               <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">נתיב שמירה מלא:</span>
+                <span className="text-slate-600 font-medium">נתיב שמירה ראשי:</span>
                 <span className="font-mono text-emerald-800 font-bold text-sm" dir="ltr">
                   {computedTargetPath}
                 </span>

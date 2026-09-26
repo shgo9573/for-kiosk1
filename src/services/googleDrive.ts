@@ -115,6 +115,27 @@ export class GoogleDriveService {
       console.error('Direct client drive query error:', e);
     }
 
+    // 3. Fallback to local / USB drives search (D:, E:, F:, G:, H:, etc.)
+    try {
+      const localRes = await fetch('/api/local-folder-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: cleanId,
+        }),
+      });
+      if (localRes.ok) {
+        const localData = await localRes.json();
+        if (localData.found && localData.folder) {
+          return {
+            found: true,
+            folder: localData.folder,
+            files: localData.files || [],
+          };
+        }
+      }
+    } catch {}
+
     return {
       found: false,
       message: `לא נמצאה תיקייה עבור תעודת זהות "${cleanId}". ודא ששם התיקייה בדרייב תואם לתעודת הזהות.`,
