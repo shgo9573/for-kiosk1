@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
+    "start:server-only": "tsx server.ts --no-browser --no-exit",
     "build": "vite build",
     "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/server.cjs --external:vite",
     "build:app": "npm run build && npm run build:server",

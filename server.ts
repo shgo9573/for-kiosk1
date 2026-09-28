@@ -705,28 +705,39 @@ app.post('/api/heartbeat', (req, res) => {
 });
 
 // Auto-exit when standalone kiosk window is closed (with safe initial grace period)
-if ((process as any).pkg) {
+// If --service or --no-exit or running in kiosk environment, keep alive
+const noAutoExit =
+  process.argv.includes('--no-exit') ||
+  process.argv.includes('--safer') ||
+  process.argv.includes('--service') ||
+  process.env['KIOSK_NO_AUTO_EXIT'] === '1';
+
+if ((process as any).pkg && !noAutoExit) {
   setInterval(() => {
-    if (hasConnected && Date.now() - lastHeartbeat > 12000) {
+    // 45 seconds tolerance for slow kiosk initial render or user switching
+    if (hasConnected && Date.now() - lastHeartbeat > 45000) {
       console.log('[Kiosk Server] Client window closed, exiting.');
       process.exit(0);
     }
-  }, 3000);
+  }, 5000);
 }
 
 function launchKioskApp(listenPort: number) {
-  const url = `http://localhost:${listenPort}`;
+  const url = `http://127.0.0.1:${listenPort}`;
   console.log(`[3/4] מאתר דפדפן לפתיחת חלון העמדה...`);
 
   try {
+    const programW6432 = process.env['ProgramW6432'] || 'C:\\Program Files';
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
     const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
     const localAppData = process.env['LOCALAPPDATA'] || '';
+    const tempDir = process.env['TEMP'] || process.env['TMP'] || 'C:\\Windows\\Temp';
 
     // Direct path candidates for Microsoft Edge (installed on 99%+ of Windows 10/11)
     const edgeCandidates = [
       path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
       path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(programW6432, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
       path.join(localAppData, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
     ];
 
@@ -734,6 +745,7 @@ function launchKioskApp(listenPort: number) {
     const chromeCandidates = [
       path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
       path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(programW6432, 'Google', 'Chrome', 'Application', 'chrome.exe'),
       path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
     ];
 
@@ -741,14 +753,21 @@ function launchKioskApp(listenPort: number) {
       try { return fs.existsSync(p); } catch { return false; }
     });
 
+    // Dedicated isolated user data profile directory for kiosk/Safer mode
+    const kioskProfileDir = path.join(localAppData || tempDir, 'TorahKioskEdgeProfile');
+
     const appArgs = [
       `--app=${url}`,
+      `--user-data-dir=${kioskProfileDir}`,
       '--new-window',
       '--window-size=1366,768',
       '--disable-extensions',
       '--no-first-run',
-      '--disable-features=Translate',
+      '--no-default-browser-check',
+      '--disable-features=Translate,msEdgeSidebarV2,msHub,msEdgeShare',
       '--disable-default-apps',
+      '--disable-dev-tools',
+      '--kiosk-printing',
     ];
 
     if (edgePath) {
@@ -820,9 +839,19 @@ function startListening(startPort: number, maxAttempts = 30) {
     }
   });
 
-  server.listen(startPort, '127.0.0.1', () => {
-    console.log(`[V] השרת המקומי פועל בהצלחה בכתובת: http://localhost:${startPort}`);
-    launchKioskApp(startPort);
+  server.listen(startPort, '0.0.0.0', () => {
+    console.log(`[V] השרת המקומי פועל בהצלחה בכתובת: http://127.0.0.1:${startPort}`);
+    const noBrowser =
+      process.argv.includes('--no-browser') ||
+      process.argv.includes('--server-only') ||
+      process.argv.includes('--service') ||
+      process.env['KIOSK_NO_BROWSER'] === '1';
+
+    if (!noBrowser) {
+      launchKioskApp(startPort);
+    } else {
+      console.log(`[info] מצב שרת בלבד (ללא פתיחה אוטומטית של דפדפן).`);
+    }
   });
 }
 

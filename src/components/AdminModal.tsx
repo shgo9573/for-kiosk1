@@ -11,6 +11,10 @@ import {
   Usb,
   RefreshCw,
   Sparkles,
+  ShieldAlert,
+  Copy,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { GoogleDriveService } from '../services/googleDrive';
@@ -67,6 +71,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const [detectedUsbDrives, setDetectedUsbDrives] = useState<DetectedUsbDrive[]>([]);
   const [isRefreshingUsb, setIsRefreshingUsb] = useState(false);
+  const [isSaferGuideOpen, setIsSaferGuideOpen] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedText(label);
+    setTimeout(() => setCopiedText(null), 2500);
+  };
 
   const [, setDriveFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [, setIsLoadingFolders] = useState(false);
@@ -520,6 +532,107 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <option value={90}>90 שניות</option>
                 <option value={120}>120 שניות</option>
               </select>
+            </div>
+
+            {/* 5. Safer Kiosk Setup Guide (הגדרות עמדה בסייפר) */}
+            <div className="rounded-lg border border-amber-300 bg-amber-50/60 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsSaferGuideOpen(!isSaferGuideOpen)}
+                className="w-full p-3.5 flex items-center justify-between text-right cursor-pointer hover:bg-amber-100/50 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-800 shrink-0" />
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      הפעלת התוכנה בעמדות עם תוכנת "סייפר" (Safer Kiosk)
+                    </h4>
+                    <p className="text-[11px] text-amber-900 font-medium">
+                      מדוע זה לא נפתח בסייפר ואיך להגדיר זאת נכון ב-2 דקות
+                    </p>
+                  </div>
+                </div>
+                {isSaferGuideOpen ? (
+                  <ChevronUp className="w-4 h-4 text-slate-600" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-600" />
+                )}
+              </button>
+
+              {isSaferGuideOpen && (
+                <div className="p-4 pt-2 border-t border-amber-200/80 text-xs text-slate-800 space-y-3">
+                  <div className="p-2.5 rounded bg-white/90 border border-amber-200 text-[11px] leading-relaxed">
+                    <strong className="text-red-700 font-bold block mb-1">
+                      מה גורם לבעיה בתוכנת סייפר?
+                    </strong>
+                    תוכנת סייפר פועלת ב"מצב מוגן" וחוסמת בברירת מחדל כל פתיחה של דפדפן (כדי למנוע גלישה). כשמפעילים את התוכנה, סייפר מזהה ניסיון לפתוח את חלון הדפדפן (Edge) וסוגרת אותו מיד.
+                  </div>
+
+                  <div className="space-y-2">
+                    <strong className="text-xs font-bold text-slate-900 block">
+                      הפתרון הפשוט - הגדרה בתוכנת סייפר:
+                    </strong>
+                    <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-700 leading-normal">
+                      <li>לחץ על <kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono text-[10px]">F8</kbd> בסייפר והקש את סיסמת הניהול (ברירת מחדל: 1234).</li>
+                      <li>היכנס אל <strong>"הגדרות עמדה"</strong> ולחץ על כפתור <strong>"הוסף"</strong>.</li>
+                      <li>
+                        הזן את הפרטים הבאים בדיוק:
+                      </li>
+                    </ol>
+
+                    <div className="space-y-2 mt-2 bg-white p-3 rounded-lg border border-slate-300">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 block">כותרת התוכנה:</span>
+                        <span className="font-semibold text-xs text-slate-900">תורה דיליה</span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-bold text-slate-500">מיקום קובץ הפעלת התוכנה:</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'path')}
+                            className="text-[10px] text-amber-800 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Copy className="w-2.5 h-2.5" />
+                            {copiedText === 'path' ? 'הועתק!' : 'העתק נתיב'}
+                          </button>
+                        </div>
+                        <input
+                          readOnly
+                          value="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+                          className="w-full h-8 px-2 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] text-slate-800 select-all"
+                          dir="ltr"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-bold text-slate-500">ארגומנטים (Arguments):</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard('--app=http://127.0.0.1:3000 --user-data-dir="C:\\TorahKioskEdge" --kiosk-printing', 'args')}
+                            className="text-[10px] text-amber-800 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Copy className="w-2.5 h-2.5" />
+                            {copiedText === 'args' ? 'הועתק!' : 'העתק ארגומנטים'}
+                          </button>
+                        </div>
+                        <input
+                          readOnly
+                          value='--app=http://127.0.0.1:3000 --user-data-dir="C:\TorahKioskEdge" --kiosk-printing'
+                          className="w-full h-8 px-2 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] text-slate-800 select-all"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-emerald-800 font-medium pt-1">
+                      💡 <strong>הגנה הרמטית:</strong> נוצר עבורך בתיקיית <code>scripts\safer-kiosk-setup.bat</code> קובץ שמפעיל את התוכנה וחוסם אוטומטית ברמת Windows כל ניסיון גלישה מחוץ לכתובת המקומית.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Save Button */}
