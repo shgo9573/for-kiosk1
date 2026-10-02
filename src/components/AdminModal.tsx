@@ -582,6 +582,29 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </li>
                     </ol>
 
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg">
+                      <span className="text-xs font-bold text-emerald-900 block mb-1">
+                        🚀 אפשרות 1 (מומלצת): אפליקציה עצמאית מלאה (~130MB) - ללא צורך ב-Edge!
+                      </span>
+                      <p className="text-[11px] text-emerald-800 leading-relaxed mb-2">
+                        חבילה עצמאית מובנית (Electron) הכוללת מנוע Chromium פרטי משלה. אין שום תלות ב-Microsoft Edge או בדפדפן המותקן במחשב.
+                      </p>
+                      <div className="bg-white p-2 rounded border border-emerald-200 font-mono text-[11px] text-slate-800">
+                        <div className="font-bold text-slate-600 mb-0.5">מיקום קובץ בסייפר:</div>
+                        <div className="select-all text-slate-900 font-bold">TorahKiosk-Standalone-130MB.exe</div>
+                        <div className="text-[10px] text-slate-500 mt-1 font-sans">
+                          * אין צורך בארגומנטים כלל! האפליקציה נפתחת ישירות במסך מלא נעול.
+                        </div>
+                      </div>
+                      <div className="mt-1.5 text-[10px] text-emerald-900 font-sans">
+                        לבניית החבילה המלאה (130MB) הרץ בטרמינל: <code className="bg-emerald-100 px-1 py-0.5 rounded font-mono font-bold">npm run build:electron</code>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] font-bold text-slate-700 mt-2">
+                      אפשרות 2: הפעלה באמצעות דפדפן Microsoft Edge המקומי
+                    </div>
+
                     <div className="space-y-2 mt-2 bg-white p-3 rounded-lg border border-slate-300">
                       <div>
                         <span className="text-[10px] font-bold text-slate-500 block">כותרת התוכנה:</span>

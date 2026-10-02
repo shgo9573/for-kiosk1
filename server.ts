@@ -723,10 +723,41 @@ if ((process as any).pkg && !noAutoExit) {
 }
 
 function launchKioskApp(listenPort: number) {
+  if (process.versions?.electron || process.env['KIOSK_NO_BROWSER'] === '1') {
+    console.log(`[info] מופעל בתוך Electron או מצב ללא דפדפן חיצוני.`);
+    return;
+  }
+
   const url = `http://127.0.0.1:${listenPort}`;
-  console.log(`[3/4] מאתר דפדפן לפתיחת חלון העמדה...`);
+  console.log(`[3/4] מאתר דפדפן / מנוע חלון עצמאי לפתיחת חלון העמדה...`);
 
   try {
+    // 0. Check for local standalone executable (e.g. Electron / bundled runtime) in current directory
+    const standaloneCandidates = [
+      path.join(process.cwd(), 'TorahKiosk-Standalone-130MB.exe'),
+      path.join(process.cwd(), 'dist-electron', 'TorahKiosk-Standalone-130MB.exe'),
+      path.join(process.cwd(), 'dist-electron', 'win-unpacked', 'תורה דיליה - עמדת קיוסק.exe'),
+      path.join(currentDirname, 'TorahKiosk-Standalone-130MB.exe'),
+      path.join(currentDirname, 'runtime', 'chrome.exe'),
+      path.join(currentDirname, 'browser', 'chrome.exe'),
+    ];
+
+    const standalonePath = standaloneCandidates.find((p) => {
+      try { return fs.existsSync(p); } catch { return false; }
+    });
+
+    if (standalonePath) {
+      console.log(`[+] נמצא מנוע חלון עצמאי מקומי (ללא תלות ב-Edge): ${standalonePath}`);
+      try {
+        const proc = spawn(standalonePath, [], { detached: true, stdio: 'ignore' });
+        proc.unref();
+        console.log(`[V] חלון העמדה העצמאי נפתח בהצלחה!`);
+        return;
+      } catch (e) {
+        console.warn(`[-] לא הצליח להפעיל מנוע מקומי, עובר לברירת מחדל:`, e);
+      }
+    }
+
     const programW6432 = process.env['ProgramW6432'] || 'C:\\Program Files';
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
     const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
