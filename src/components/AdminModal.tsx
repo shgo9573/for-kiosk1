@@ -15,6 +15,8 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
+  Download,
+  FileCode,
 } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { GoogleDriveService } from '../services/googleDrive';
@@ -633,6 +635,30 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* 6. Standalone Single HTML Download */}
+            <div className="p-3.5 rounded-lg border border-blue-200 bg-blue-50/50 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-4 h-4 text-blue-700 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    הורדת קובץ HTML בודד ועצמאי (Standalone)
+                  </h4>
+                  <p className="text-[11px] text-slate-600">
+                    קובץ בודד ללא צורך בהתקנת שרת או Node.js — פשוט מורידים ומריצים בכל דפדפן.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="/torah-kiosk-standalone.html"
+                download="torah-kiosk-standalone.html"
+                className="w-full py-2 px-3 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-2 transition cursor-pointer text-center no-underline"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>הורד קובץ torah-kiosk-standalone.html עכשיו</span>
+              </a>
             </div>
 
             {/* Save Button */}
