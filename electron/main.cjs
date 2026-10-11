@@ -7,11 +7,16 @@ const { fork } = require('child_process');
 process.env['NODE_ENV'] = 'production';
 process.env['KIOSK_NO_BROWSER'] = '1';
 
-// Determine log directory (Portable executable folder or current working directory)
-const logDir = process.env.PORTABLE_EXECUTABLE_DIR || process.cwd();
-const logFilePath = path.join(logDir, 'kiosk-debug.log');
+// Determine multiple candidate log directories to guarantee writing succeeds
+const candidateLogDirs = [
+  process.env.PORTABLE_EXECUTABLE_DIR,
+  process.cwd(),
+  path.dirname(process.execPath),
+  process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'Desktop') : null,
+  process.env.TEMP,
+].filter(Boolean);
 
-// Core file logger
+// Core multi-destination file logger
 function writeLog(tag, ...args) {
   const timestamp = new Date().toISOString();
   const text = args.map((a) => {
@@ -23,9 +28,14 @@ function writeLog(tag, ...args) {
   }).join(' ');
 
   const line = `[${timestamp}] [${tag}] ${text}\n`;
-  try {
-    fs.appendFileSync(logFilePath, line, 'utf8');
-  } catch (err) {}
+
+  // Write to all accessible log destinations
+  for (const dir of candidateLogDirs) {
+    try {
+      const target = path.join(dir, 'kiosk-debug.log');
+      fs.appendFileSync(target, line, 'utf8');
+    } catch (err) {}
+  }
 
   // Also print to standard streams if running from terminal
   try {

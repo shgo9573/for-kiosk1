@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "torah-kiosk",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "vite build",
     "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/server.cjs --external:vite",
     "build:app": "npm run build && npm run build:server",
-    "build:electron": "npm run build:app && electron-builder --win portable",
+    "build:electron": "npm run build:app && electron-builder --win",
     "package:win": "npm run build:app && electron-builder --win --x64 dir",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js dist-electron",
@@ -21,7 +21,8 @@
   "bin": "dist/server.cjs",
   "build": {
     "appId": "com.torah.kiosk",
-    "productName": "תורה דיליה",
+    "productName": "ToraDeliaKiosk",
+    "executableName": "ToraDelia-Kiosk",
     "directories": {
       "output": "dist-electron"
     },
@@ -32,10 +33,20 @@
     ],
     "compression": "maximum",
     "win": {
-      "target": "portable"
+      "target": [
+        "portable",
+        "nsis",
+        "dir"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "ToraDelia-Kiosk-Setup.exe"
     },
     "portable": {
-      "artifactName": "ToraDelia-Kiosk.exe"
+      "artifactName": "ToraDelia-Kiosk.exe",
+      "requestExecutionLevel": "user"
     }
   },
   "dependencies": {

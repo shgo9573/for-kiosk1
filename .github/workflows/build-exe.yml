@@ -26,37 +26,57 @@ jobs:
     - name: Build Web App & Bundle Server
       run: npm run build:app
 
-    - name: Build Standalone EXE (~130MB with Chromium Engine Embedded)
-      run: npx electron-builder --win portable --x64
+    - name: Build Standalone Windows Packages (~130MB with Embedded Chromium)
+      run: npx electron-builder --win --x64
 
-    - name: Verify Output File Exists
+    - name: Compress Unpacked Folder to ZIP
       shell: pwsh
       run: |
-        Get-ChildItem -Path dist-electron -Filter "*.exe" | ForEach-Object {
-          Write-Host "Generated EXE: $($_.FullName) - Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+        if (Test-Path "dist-electron/win-unpacked") {
+          Compress-Archive -Path "dist-electron/win-unpacked/*" -DestinationPath "dist-electron/ToraDelia-Kiosk-Windows.zip" -Force
         }
 
-    - name: Upload EXE to GitHub Actions Artifacts
+    - name: Verify Output Files
+      shell: pwsh
+      run: |
+        Get-ChildItem -Path dist-electron | ForEach-Object {
+          Write-Host "Output: $($_.Name) - Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+        }
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ToraDelia-Kiosk-Windows-EXE
-        path: dist-electron/ToraDelia-Kiosk.exe
+        name: ToraDelia-Kiosk-Windows
+        path: |
+          dist-electron/ToraDelia-Kiosk.exe
+          dist-electron/ToraDelia-Kiosk-Setup.exe
+          dist-electron/ToraDelia-Kiosk-Windows.zip
 
-    - name: Publish EXE to GitHub Releases
+    - name: Publish to GitHub Releases
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
         name: "תורה דיליה - גרסה עצמאית מלאה (Standalone 130MB)"
         body: |
-          ## עמדת תורה דיליה - קובץ EXE עצמאי מלא (130MB)
+          ## עמדת תורה דיליה - גרסה עצמאית מלאה (130MB)
           
-          קובץ יחיד להפעלה מיידית בלחיצה כפולה.
+          כל הקבצים כוללים מנוע Chromium ושרת שלם מקומפלים פנימה - **ללא צורך ב-Microsoft Edge וללא צורך באינטרנט!**
           
-          * **מנוע מלא:** כולל מנוע Chromium ו-Node.js שלם מקומפל בתוך הקובץ.
-          * **ללא תלות בדפדפן:** לא דורש Microsoft Edge או כל דפדפן אחר המותקן במחשב.
-          * **ללא צורך בהתקנה:** קובץ EXE בודד שרץ ישירות במסך מלא נעול (Kiosk).
-          * מתאים במיוחד לעמדות סייפר (Safer) ולמחשבים ללא גישה לאינטרנט.
+          ### 📥 קבצים להורדה לבחירתך:
+          
+          1. **`ToraDelia-Kiosk.exe`** (מומלץ):
+             * קובץ EXE בודד ועצמאי (Portable) להפעלה מיידית ללא התקנה.
+             * כולל מנגנון רישום לוגים אוטומטי (`kiosk-debug.log`).
+          
+          2. **`ToraDelia-Kiosk-Setup.exe`**:
+             * מתקין רשמי של Windows (לחיצה אחת והתוכנה מותקנת עם קיצור דרך על שולחן העבודה).
+             * מומלץ למחשבי סייפר (Safer) החוסמים הפעלה מתיקיות זמניות.
+          
+          3. **`ToraDelia-Kiosk-Windows.zip`**:
+             * תיקייה מלאה פרוסה. פשוט מחלצים לכל מקום (או לדיסק און קי) ומפעילים ישירות את `ToraDelia-Kiosk.exe` ללא התקנה וללא חילוץ זמני.
         files: |
           dist-electron/ToraDelia-Kiosk.exe
+          dist-electron/ToraDelia-Kiosk-Setup.exe
+          dist-electron/ToraDelia-Kiosk-Windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
