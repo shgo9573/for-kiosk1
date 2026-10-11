@@ -16,8 +16,8 @@ if exist "TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0TorahKiosk-S
 if not defined STANDALONE_EXE if exist "..\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0..\TorahKiosk-Standalone-130MB.exe"
 if not defined STANDALONE_EXE if exist "dist-electron\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0dist-electron\TorahKiosk-Standalone-130MB.exe"
 if not defined STANDALONE_EXE if exist "..\dist-electron\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0..\dist-electron\TorahKiosk-Standalone-130MB.exe"
-if not defined STANDALONE_EXE if exist "dist-electron\win-unpacked\תורה דיליה - עמדת קיוסק.exe" set "STANDALONE_EXE=%~dp0dist-electron\win-unpacked\תורה דיליה - עמדת קיוסק.exe"
-if not defined STANDALONE_EXE if exist "..\dist-electron\win-unpacked\תורה דיליה - עמדת קיוסק.exe" set "STANDALONE_EXE=%~dp0..\dist-electron\win-unpacked\תורה דיליה - עמדת קיוסק.exe"
+if not defined STANDALONE_EXE if exist "dist-electron\win-unpacked\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0dist-electron\win-unpacked\TorahKiosk-Standalone-130MB.exe"
+if not defined STANDALONE_EXE if exist "dist-electron\win-unpacked\electron.exe" set "STANDALONE_EXE=%~dp0dist-electron\win-unpacked\electron.exe"
 
 :: אם נמצאה האפליקציה העצמאית (130MB) - מפעיל אותה ישירות ללא שום תלות ב-Edge!
 if defined STANDALONE_EXE (
