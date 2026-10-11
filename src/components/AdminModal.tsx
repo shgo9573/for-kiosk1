@@ -591,7 +591,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </p>
                       <div className="bg-white p-2 rounded border border-emerald-200 font-mono text-[11px] text-slate-800">
                         <div className="font-bold text-slate-600 mb-0.5">מיקום קובץ בסייפר:</div>
-                        <div className="select-all text-slate-900 font-bold">TorahKiosk-Standalone-130MB.exe</div>
+                        <div className="select-all text-slate-900 font-bold">ToraDelia-Kiosk.exe</div>
                         <div className="text-[10px] text-slate-500 mt-1 font-sans">
                           * אין צורך בארגומנטים כלל! האפליקציה נפתחת ישירות במסך מלא נעול.
                         </div>

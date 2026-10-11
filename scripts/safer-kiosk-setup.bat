@@ -12,7 +12,11 @@ cd /d "%~dp0"
 
 :: 1. בדיקה אם קיימת אפליקציה עצמאית מובנית (Electron Standalone ~130MB)
 set "STANDALONE_EXE="
-if exist "TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0TorahKiosk-Standalone-130MB.exe"
+if exist "ToraDelia-Kiosk.exe" set "STANDALONE_EXE=%~dp0ToraDelia-Kiosk.exe"
+if not defined STANDALONE_EXE if exist "..\ToraDelia-Kiosk.exe" set "STANDALONE_EXE=%~dp0..\ToraDelia-Kiosk.exe"
+if not defined STANDALONE_EXE if exist "dist-electron\ToraDelia-Kiosk.exe" set "STANDALONE_EXE=%~dp0dist-electron\ToraDelia-Kiosk.exe"
+if not defined STANDALONE_EXE if exist "..\dist-electron\ToraDelia-Kiosk.exe" set "STANDALONE_EXE=%~dp0..\dist-electron\ToraDelia-Kiosk.exe"
+if not defined STANDALONE_EXE if exist "TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0TorahKiosk-Standalone-130MB.exe"
 if not defined STANDALONE_EXE if exist "..\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0..\TorahKiosk-Standalone-130MB.exe"
 if not defined STANDALONE_EXE if exist "dist-electron\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0dist-electron\TorahKiosk-Standalone-130MB.exe"
 if not defined STANDALONE_EXE if exist "..\dist-electron\TorahKiosk-Standalone-130MB.exe" set "STANDALONE_EXE=%~dp0..\dist-electron\TorahKiosk-Standalone-130MB.exe"

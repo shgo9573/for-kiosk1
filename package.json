@@ -30,24 +30,13 @@
       "electron/**/*",
       "package.json"
     ],
+    "compression": "maximum",
     "win": {
-      "target": [
-        "portable",
-        "dir"
-      ]
+      "target": "portable"
     },
     "portable": {
-      "artifactName": "ToraDelia-Kiosk-Standalone-130MB.exe"
+      "artifactName": "ToraDelia-Kiosk.exe"
     }
-  },
-  "pkg": {
-    "assets": [
-      "dist/**/*"
-    ],
-    "targets": [
-      "node18-win-x64"
-    ],
-    "outputPath": "dist-exe"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
