@@ -1,9 +1,3 @@
-console.log('');
-console.log('=====================================================');
-console.log('       עמדת תורה דיליה - Kiosk Server');
-console.log('=====================================================');
-console.log('[1/4] טוען את המערכת...');
-
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -14,6 +8,31 @@ import { fileURLToPath } from 'url';
 
 const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
 const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFilename ? path.dirname(currentFilename) : process.cwd());
+
+function appendServerLog(msg: string) {
+  try {
+    const logDir = process.env['PORTABLE_EXECUTABLE_DIR'] || process.cwd();
+    const logFile = path.join(logDir, 'kiosk-debug.log');
+    const line = `[${new Date().toISOString()}] [Server] ${msg}\n`;
+    fs.appendFileSync(logFile, line, 'utf8');
+  } catch {}
+}
+
+const origConsoleLog = console.log;
+const origConsoleError = console.error;
+console.log = (...args: any[]) => {
+  appendServerLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  origConsoleLog(...args);
+};
+console.error = (...args: any[]) => {
+  appendServerLog('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  origConsoleError(...args);
+};
+
+console.log('=====================================================');
+console.log('       עמדת תורה דיליה - Kiosk Server');
+console.log('=====================================================');
+console.log('[1/4] טוען את המערכת...');
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
