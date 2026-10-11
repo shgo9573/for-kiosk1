@@ -27,7 +27,9 @@ jobs:
       run: npm run build:app
 
     - name: Build Standalone Windows Packages (~130MB with Embedded Chromium)
-      run: npx electron-builder --win --x64
+      run: npx electron-builder --win --x64 --publish never
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Compress Unpacked Folder to ZIP
       shell: pwsh
