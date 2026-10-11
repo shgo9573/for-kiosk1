@@ -1,8 +1,9 @@
-name: Build and Release Windows EXE
+name: Build and Release Windows Standalone Kiosk (130MB)
 
 on:
   push:
     branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build-and-release:
@@ -25,39 +26,54 @@ jobs:
     - name: Build Web App & Bundle Server
       run: npm run build:app
 
-    - name: Compile Windows EXE with Brotli Compression (~45MB)
-      run: npx pkg dist/server.cjs --config pkg-config.json -C Brotli --targets node18-win-x64 --output dist-exe/ToraDelia-Kiosk.exe
+    - name: Build Full Standalone Windows Kiosk (~130MB with Chromium, No Edge Required)
+      run: npx electron-builder --win --x64
 
-    - name: Hide Console Window (Set Windows GUI Subsystem)
-      run: node scripts/set-gui-subsystem.cjs dist-exe/ToraDelia-Kiosk.exe
-
-    - name: Compress EXE to ZIP
+    - name: Zip Unpacked Standalone Folder
       shell: pwsh
       run: |
-        Compress-Archive -Path dist-exe/ToraDelia-Kiosk.exe -DestinationPath dist-exe/ToraDelia-Kiosk-Windows.zip -Force
+        if (Test-Path "dist-electron/win-unpacked") {
+          Compress-Archive -Path "dist-electron/win-unpacked/*" -DestinationPath "dist-electron/ToraDelia-Kiosk-Standalone-Folder-130MB.zip" -Force
+        }
+
+    - name: Compile Lightweight Version (~35MB for Edge mode fallback)
+      run: |
+        npx pkg dist/server.cjs --config pkg-config.json -C Brotli --targets node18-win-x64 --output dist-electron/ToraDelia-Kiosk-Lite-35MB.exe
+        node scripts/set-gui-subsystem.cjs dist-electron/ToraDelia-Kiosk-Lite-35MB.exe
 
     - name: Upload to GitHub Actions Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ToraDelia-Kiosk-Windows-EXE
+        name: ToraDelia-Kiosk-Windows-Standalone
         path: |
-          dist-exe/ToraDelia-Kiosk.exe
-          dist-exe/ToraDelia-Kiosk-Windows.zip
+          dist-electron/ToraDelia-Kiosk-Standalone-130MB.exe
+          dist-electron/ToraDelia-Kiosk-Standalone-Folder-130MB.zip
+          dist-electron/ToraDelia-Kiosk-Lite-35MB.exe
 
     - name: Publish or Update GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: "גרסה אחרונה להורדה (Latest Windows Kiosk)"
+        name: "גרסה אחרונה להורדה (Latest Standalone Windows Kiosk - 130MB)"
         body: |
-          עמדת תורה דיליה עבור Windows - גרסה עצמאית ונקייה ללא חלון שחור (Windowed GUI Kiosk).
+          ## עמדת תורה דיליה - גרסה עצמאית מלאה (Standalone 130MB)
           
-          ### הוראות הפעלה:
-          1. הורידו את **ToraDelia-Kiosk.exe** (או את קובץ ה-ZIP).
-          2. לחצו לחיצה כפולה על **ToraDelia-Kiosk.exe**.
-          3. חלון עמדת תורה דיליה ייפתח מיד כחלון אפליקציה ייעודי ונקי, ללא חלון קונסולה שחור.
+          ### 🚀 קבצים להורדה:
+          1. **ToraDelia-Kiosk-Standalone-130MB.exe** (מומלץ ביותר):
+             * **גודל: כ-130MB**
+             * כולל מנוע Chromium פנימי עצמאי ומאובטח.
+             * **אין צורך ב-Microsoft Edge או בדפדפן כלשהו במחשב!**
+             * פשוט מורידים, לוחצים פעמיים והעמדה נפתחת במסך מלא נעול.
+             * מושלם לעמדות סייפר (Safer), מחשבים מנותקי אינטרנט, ועמדות בית מדרש.
+          
+          2. **ToraDelia-Kiosk-Standalone-Folder-130MB.zip**:
+             * תיקייה מלאה פרוסה להעתקה ישירה לכל עמדה.
+          
+          3. **ToraDelia-Kiosk-Lite-35MB.exe**:
+             * גרסה קלת-משקל של השרת בלבד (מסתמכת על דפדפן Edge המותקן במחשב).
         files: |
-          dist-exe/ToraDelia-Kiosk.exe
-          dist-exe/ToraDelia-Kiosk-Windows.zip
+          dist-electron/ToraDelia-Kiosk-Standalone-130MB.exe
+          dist-electron/ToraDelia-Kiosk-Standalone-Folder-130MB.zip
+          dist-electron/ToraDelia-Kiosk-Lite-35MB.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

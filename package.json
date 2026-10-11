@@ -21,7 +21,7 @@
   "bin": "dist/server.cjs",
   "build": {
     "appId": "com.torah.kiosk",
-    "productName": "תורה דיליה - עמדת קיוסק",
+    "productName": "תורה דיליה",
     "directories": {
       "output": "dist-electron"
     },
@@ -31,10 +31,13 @@
       "package.json"
     ],
     "win": {
-      "target": "portable"
+      "target": [
+        "portable",
+        "dir"
+      ]
     },
     "portable": {
-      "artifactName": "TorahKiosk-Standalone-130MB.exe"
+      "artifactName": "ToraDelia-Kiosk-Standalone-130MB.exe"
     }
   },
   "pkg": {

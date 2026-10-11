@@ -10,30 +10,56 @@ const SERVER_URL = `http://127.0.0.1:${PORT}`;
 
 // 1. Start backend server in background with --no-browser and --safer
 function startServerProcess() {
-  const serverScript = path.join(__dirname, '..', 'dist', 'server.cjs');
-  const fallbackScript = path.join(__dirname, '..', 'server.ts');
   const fs = require('fs');
+  const candidatePaths = [
+    path.join(app.getAppPath(), 'dist', 'server.cjs'),
+    path.join(__dirname, '..', 'dist', 'server.cjs'),
+    path.join(process.resourcesPath || '', 'app', 'dist', 'server.cjs'),
+    path.join(process.resourcesPath || '', 'dist', 'server.cjs'),
+    path.join(__dirname, 'server.cjs'),
+  ];
 
-  let scriptToRun = serverScript;
+  const serverScript = candidatePaths.find((p) => {
+    try { return fs.existsSync(p); } catch { return false; }
+  });
+
+  process.env['PORT'] = String(PORT);
+  process.env['KIOSK_NO_BROWSER'] = '1';
+
+  if (serverScript) {
+    console.log('[Electron] Loading bundled server:', serverScript);
+    try {
+      require(serverScript);
+      return;
+    } catch (requireErr) {
+      console.warn('[Electron] Failed in-process require, trying child process:', requireErr);
+    }
+  }
+
+  const fallbackScript = path.join(__dirname, '..', 'server.ts');
+  let scriptToRun = serverScript || fallbackScript;
   let execArgv = [];
 
-  if (!fs.existsSync(serverScript) && fs.existsSync(fallbackScript)) {
-    // Development mode fallback
+  if (!serverScript && fs.existsSync(fallbackScript)) {
     scriptToRun = fallbackScript;
     execArgv = ['--import', 'tsx'];
   }
 
-  console.log('[Electron] Starting background Kiosk server:', scriptToRun);
+  console.log('[Electron] Starting fallback server process:', scriptToRun);
 
-  serverProcess = fork(scriptToRun, ['--no-browser', '--safer'], {
-    env: { ...process.env, PORT: String(PORT), KIOSK_NO_BROWSER: '1' },
-    stdio: 'inherit',
-    execArgv,
-  });
+  try {
+    serverProcess = fork(scriptToRun, ['--no-browser', '--safer'], {
+      env: { ...process.env, PORT: String(PORT), KIOSK_NO_BROWSER: '1' },
+      stdio: 'inherit',
+      execArgv,
+    });
 
-  serverProcess.on('error', (err) => {
-    console.error('[Electron] Server process error:', err);
-  });
+    serverProcess.on('error', (err) => {
+      console.error('[Electron] Server process error:', err);
+    });
+  } catch (err) {
+    console.error('[Electron] Could not fork server process:', err);
+  }
 }
 
 // 2. Poll server until ready
