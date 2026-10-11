@@ -16,6 +16,9 @@ const candidateLogDirs = [
   process.env.TEMP,
 ].filter(Boolean);
 
+const logDir = candidateLogDirs[0] || process.cwd();
+const logFilePath = path.join(logDir, 'kiosk-debug.log');
+
 // Core multi-destination file logger
 function writeLog(tag, ...args) {
   const timestamp = new Date().toISOString();

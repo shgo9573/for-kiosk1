@@ -32,7 +32,7 @@
       "package.json"
     ],
     "publish": null,
-    "compression": "maximum",
+    "compression": "normal",
     "win": {
       "target": [
         "portable",
