@@ -17,7 +17,7 @@ const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFi
 
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production' || !!process.versions?.electron || !!(process as any).pkg;
 
 app.use(express.json({ limit: '100mb' }));
 
@@ -888,40 +888,56 @@ function startListening(startPort: number, maxAttempts = 30) {
 
 async function startServer() {
   let staticDir = '';
-  if (!isProd && !(process as any).pkg) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const candidates = [
-      path.resolve(currentDirname, 'dist'),
-      path.resolve(currentDirname),
-      path.join(process.cwd(), 'dist'),
-      path.join(process.cwd()),
-    ];
-    staticDir = candidates.find((dir) => {
-      try { return fs.existsSync(path.join(dir, 'index.html')); } catch { return false; }
-    }) || path.resolve(currentDirname, 'dist');
+  const hasViteConfig = fs.existsSync(path.resolve(process.cwd(), 'vite.config.ts'));
+  const shouldUseVite = !isProd && hasViteConfig && !process.versions?.electron && !(process as any).pkg;
 
-    console.log(`[info] נתיב קבצי ממשק: ${staticDir}`);
-    app.use(express.static(staticDir));
-    app.get('*', (req, res) => {
-      const indexPath = path.join(staticDir, 'index.html');
-      try {
-        if (fs.existsSync(indexPath)) {
-          res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.send(fs.readFileSync(indexPath, 'utf-8'));
-          return;
-        }
-      } catch {}
-      res.sendFile(indexPath);
-    });
+  if (shouldUseVite) {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      console.warn('[Server] Could not initialize Vite dev middleware, serving static files:', viteErr);
+      setupStaticServing();
+    }
+  } else {
+    setupStaticServing();
   }
 
   startListening(port);
+}
+
+function setupStaticServing() {
+  const candidates = [
+    path.resolve(currentDirname, 'dist'),
+    path.resolve(currentDirname),
+    path.join(process.cwd(), 'dist'),
+    path.join(process.cwd()),
+    path.join(process.resourcesPath || '', 'app', 'dist'),
+    path.join(process.resourcesPath || '', 'app.asar', 'dist'),
+    path.join(process.resourcesPath || '', 'dist'),
+    path.resolve(currentDirname, '..', 'dist'),
+  ];
+  const staticDir = candidates.find((dir) => {
+    try { return fs.existsSync(path.join(dir, 'index.html')); } catch { return false; }
+  }) || path.resolve(currentDirname, 'dist');
+
+  console.log(`[info] נתיב קבצי ממשק: ${staticDir}`);
+  app.use(express.static(staticDir));
+  app.get('*', (req, res) => {
+    const indexPath = path.join(staticDir, 'index.html');
+    try {
+      if (fs.existsSync(indexPath)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(fs.readFileSync(indexPath, 'utf-8'));
+        return;
+      }
+    } catch {}
+    res.sendFile(indexPath);
+  });
 }
 
 startServer();
