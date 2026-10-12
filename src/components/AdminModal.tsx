@@ -17,6 +17,8 @@ import {
   ChevronUp,
   Download,
   FileCode,
+  Power,
+  BarChart3,
 } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { GoogleDriveService } from '../services/googleDrive';
@@ -70,6 +72,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [autoDetectRemovableDrive, setAutoDetectRemovableDrive] = useState<boolean>(
     config.autoDetectRemovableDrive !== false
   );
+  const [limitToDEOnly, setLimitToDEOnly] = useState<boolean>(config.limitToDEOnly ?? false);
+  const [stats, setStats] = useState<{ totalPrints: number; totalCopies: number } | null>(null);
+  const [isShuttingDown, setIsShuttingDown] = useState(false);
 
   const [detectedUsbDrives, setDetectedUsbDrives] = useState<DetectedUsbDrive[]>([]);
   const [isRefreshingUsb, setIsRefreshingUsb] = useState(false);
@@ -86,6 +91,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [, setIsLoadingFolders] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/api/stats');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.stats) setStats(data.stats);
+      }
+    } catch {}
+  };
 
   const refreshUsbDrives = async () => {
     setIsRefreshingUsb(true);
@@ -117,7 +132,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         typeof config.fallbackDriveCount === 'number' ? config.fallbackDriveCount : 5
       );
       setAutoDetectRemovableDrive(config.autoDetectRemovableDrive !== false);
+      setLimitToDEOnly(config.limitToDEOnly ?? false);
       refreshUsbDrives();
+      fetchStats();
     }
   }, [isOpen, config]);
 
@@ -169,7 +186,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   const computedTargetPath = `${targetDriveLetter.toUpperCase()}:\\${targetFolderName.trim() || 'תורה דיליה'}`;
-  const driveSequence = getDriveSequence(targetDriveLetter, fallbackDriveCount);
+  const driveSequence = getDriveSequence(targetDriveLetter, fallbackDriveCount, limitToDEOnly);
+
+  const handleFullShutdown = async () => {
+    if (!window.confirm('האם אתה בטוח שברצונך לכבות את כל שירותי העמדה ולסגור את התוכנה לחלוטין?')) {
+      return;
+    }
+    setIsShuttingDown(true);
+    try {
+      await fetch('/api/system/shutdown', { method: 'POST' });
+    } catch {}
+  };
 
   const handleSave = () => {
     onSaveConfig({
@@ -184,6 +211,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       dDriveTargetPath: computedTargetPath,
       fallbackDriveCount,
       autoDetectRemovableDrive,
+      limitToDEOnly,
     });
     setSaveSuccess(true);
     setTimeout(() => {
@@ -416,6 +444,41 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Option to limit scan to D and E only */}
+                <div
+                  onClick={() => setLimitToDEOnly(!limitToDEOnly)}
+                  className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-start justify-between gap-3 ${
+                    limitToDEOnly
+                      ? 'bg-amber-50/90 border-amber-500/80 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span className="text-xs font-bold text-slate-900">
+                        סריקת כוננים D: ו-E: בלבד (אל תמשיך ל-F: והלאה)
+                      </span>
+                      {limitToDEOnly && (
+                        <span className="text-[10px] font-bold bg-amber-700 text-white px-1.5 py-0.5 rounded">
+                          פעיל (D+E בלבד)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      העמדה תנסה לאתר ולשמור אך ורק בכוננים D: ו-E: במחשב ולא תמשיך לסרוק לכונן F: ומעלה.
+                    </p>
+                  </div>
+                  <div className="pt-0.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={limitToDEOnly}
+                      onChange={(e) => setLimitToDEOnly(e.target.checked)}
+                      className="w-5 h-5 text-amber-600 rounded cursor-pointer accent-amber-700"
+                    />
+                  </div>
                 </div>
 
                 {/* Live Sequence Badges */}
@@ -682,6 +745,61 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <Download className="w-3.5 h-3.5" />
                 <span>הורד קובץ torah-kiosk-standalone.html עכשיו</span>
               </a>
+            </div>
+
+            {/* 7. All-time Persistent Usage Statistics */}
+            <div className="p-3.5 rounded-lg bg-indigo-50/80 border border-indigo-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-indigo-700 shrink-0" />
+                  <span className="text-xs font-bold text-indigo-950">
+                    סטטיסטיקת עמדה מצטברת (מתועד ומתעדכן בלוגים)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchStats}
+                  className="text-[10px] text-indigo-700 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  רענן
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <div className="bg-white p-2 rounded-lg border border-indigo-200 text-center shadow-2xs">
+                  <div className="text-[10px] text-slate-500 font-medium">סך כל ההדפסות שבוצעו:</div>
+                  <div className="text-lg font-bold text-indigo-900 font-mono">{stats?.totalPrints ?? 0}</div>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-indigo-200 text-center shadow-2xs">
+                  <div className="text-[10px] text-slate-500 font-medium">סך כל ההעתקות לדיסק און קי:</div>
+                  <div className="text-lg font-bold text-indigo-900 font-mono">{stats?.totalCopies ?? 0}</div>
+                </div>
+              </div>
+              <p className="text-[10px] text-indigo-800 leading-tight">
+                * נתונים אלו נשמרים לצמיתות ומתעדכנים אוטומטית גם בחלק התחתון של קובץ <code>kiosk-debug.log</code>.
+              </p>
+            </div>
+
+            {/* 8. Full Application Shutdown Button */}
+            <div className="p-3.5 rounded-lg bg-red-50/80 border border-red-200 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                  <Power className="w-4 h-4 text-red-600 shrink-0" />
+                  כיבוי וסגירת התוכנה לחלוטין (כיבוי שרת וחלון)
+                </span>
+                <span className="text-[11px] text-red-700 block mt-0.5">
+                  מכבה לחלוטין את כל שירותי העמדה והשרת המקומי ברקע.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleFullShutdown}
+                disabled={isShuttingDown}
+                className="px-3.5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>{isShuttingDown ? 'מכבה...' : 'כיבוי מערכת מלא'}</span>
+              </button>
             </div>
 
             {/* Save Button */}

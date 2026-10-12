@@ -9,12 +9,162 @@ import { fileURLToPath } from 'url';
 const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
 const currentDirname = typeof __dirname !== 'undefined' ? __dirname : (currentFilename ? path.dirname(currentFilename) : process.cwd());
 
+interface KioskStats {
+  totalPrints: number;
+  totalCopies: number;
+  firstRunTimestamp: string;
+  lastUpdatedTimestamp: string;
+}
+
+function getCandidateLogDirs(): string[] {
+  const dirs = [
+    process.env['PORTABLE_EXECUTABLE_DIR'],
+    process.cwd(),
+    typeof process.execPath === 'string' ? path.dirname(process.execPath) : null,
+    process.env['USERPROFILE'] ? path.join(process.env['USERPROFILE'], 'Desktop') : null,
+    process.env['TEMP'],
+  ].filter(Boolean) as string[];
+
+  return Array.from(new Set(dirs));
+}
+
+function getStatsFilePath(): string {
+  const dirs = getCandidateLogDirs();
+  for (const dir of dirs) {
+    try {
+      const p = path.join(dir, 'kiosk-stats.json');
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  const logDir = process.env['PORTABLE_EXECUTABLE_DIR'] || process.cwd();
+  return path.join(logDir, 'kiosk-stats.json');
+}
+
+function loadKioskStats(): KioskStats {
+  try {
+    const statsPath = getStatsFilePath();
+    if (fs.existsSync(statsPath)) {
+      const data = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+      return {
+        totalPrints: Number(data.totalPrints) || 0,
+        totalCopies: Number(data.totalCopies) || 0,
+        firstRunTimestamp: data.firstRunTimestamp || new Date().toISOString(),
+        lastUpdatedTimestamp: data.lastUpdatedTimestamp || new Date().toISOString(),
+      };
+    }
+  } catch {}
+
+  const initial: KioskStats = {
+    totalPrints: 0,
+    totalCopies: 0,
+    firstRunTimestamp: new Date().toISOString(),
+    lastUpdatedTimestamp: new Date().toISOString(),
+  };
+  saveKioskStats(initial);
+  return initial;
+}
+
+const STATS_START_TAG = '============================================================\n=== [סיכום פעילות עמדה מצטבר (מהפעם הראשונה שהמערכת הופעלה)] ===';
+const STATS_END_TAG = '============================================================';
+
+function generateStatsBlock(stats: KioskStats): string {
+  const localTime = new Date().toLocaleString('he-IL');
+  return `${STATS_START_TAG}\n` +
+    `סך כל ההדפסות שבוצעו עד עכשיו: ${stats.totalPrints}\n` +
+    `סך כל ההעתקות לדיסק און קי עד עכשיו: ${stats.totalCopies}\n` +
+    `עודכן לאחרונה: ${localTime}\n` +
+    `${STATS_END_TAG}\n`;
+}
+
+function updateLogStatsSection(stats: KioskStats) {
+  const dirs = getCandidateLogDirs();
+  const statsBlock = generateStatsBlock(stats);
+
+  for (const dir of dirs) {
+    try {
+      const logFile = path.join(dir, 'kiosk-debug.log');
+      if (!fs.existsSync(logFile)) {
+        if (dir === dirs[0]) {
+          fs.writeFileSync(logFile, `[${new Date().toISOString()}] [Server] התחלת רישום לוגים לעמדת תורה דיליה\n\n` + statsBlock, 'utf8');
+        }
+        continue;
+      }
+
+      let content = fs.readFileSync(logFile, 'utf8');
+
+      // Strip existing stats block patterns (both current and legacy)
+      const possiblePatterns = [
+        '============================================================\n=== [סיכום פעילות עמדה מצטבר',
+        '=== [סיכום פעילות עמדה מצטבר',
+        '=== [סטטיסטיקת עמדה מצטברת (כל הזמנים)] ===',
+      ];
+
+      for (const pattern of possiblePatterns) {
+        const idx = content.indexOf(pattern);
+        if (idx !== -1) {
+          content = content.substring(0, idx);
+        }
+      }
+
+      content = content.trimEnd() + '\n\n' + statsBlock;
+      fs.writeFileSync(logFile, content, 'utf8');
+    } catch (err) {
+      origConsoleError('Could not update stats section in kiosk-debug.log:', err);
+    }
+  }
+}
+
+function saveKioskStats(stats: KioskStats) {
+  try {
+    const statsPath = getStatsFilePath();
+    stats.lastUpdatedTimestamp = new Date().toISOString();
+    fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2), 'utf8');
+  } catch {}
+  updateLogStatsSection(stats);
+}
+
 function appendServerLog(msg: string) {
   try {
-    const logDir = process.env['PORTABLE_EXECUTABLE_DIR'] || process.cwd();
-    const logFile = path.join(logDir, 'kiosk-debug.log');
+    const dirs = getCandidateLogDirs();
     const line = `[${new Date().toISOString()}] [Server] ${msg}\n`;
-    fs.appendFileSync(logFile, line, 'utf8');
+
+    for (const dir of dirs) {
+      try {
+        const logFile = path.join(dir, 'kiosk-debug.log');
+        if (!fs.existsSync(logFile)) {
+          if (dir === dirs[0]) {
+            fs.writeFileSync(logFile, line, 'utf8');
+            const stats = loadKioskStats();
+            updateLogStatsSection(stats);
+          }
+          continue;
+        }
+
+        let content = fs.readFileSync(logFile, 'utf8');
+        const possiblePatterns = [
+          '============================================================\n=== [סיכום פעילות עמדה מצטבר',
+          '=== [סיכום פעילות עמדה מצטבר',
+          '=== [סטטיסטיקת עמדה מצטברת (כל הזמנים)] ===',
+        ];
+
+        let foundIdx = -1;
+        for (const pattern of possiblePatterns) {
+          const idx = content.indexOf(pattern);
+          if (idx !== -1) {
+            foundIdx = idx;
+            break;
+          }
+        }
+
+        if (foundIdx !== -1) {
+          // Insert the log line BEFORE the stats section so stats block stays strictly at the very bottom
+          content = content.substring(0, foundIdx) + line + content.substring(foundIdx);
+          fs.writeFileSync(logFile, content, 'utf8');
+        } else {
+          fs.appendFileSync(logFile, line, 'utf8');
+        }
+      } catch {}
+    }
   } catch {}
 }
 
@@ -40,9 +190,20 @@ const isProd = process.env.NODE_ENV === 'production' || !!process.versions?.elec
 
 app.use(express.json({ limit: '100mb' }));
 
+// Initial stats sync to log file on boot
+try {
+  const bootStats = loadKioskStats();
+  updateLogStatsSection(bootStats);
+} catch {}
+
 // Compute candidate drive letters sequence starting from primaryLetter
-function getDriveSequence(primaryLetter: string = 'D', fallbackCount: number = 5): string[] {
+function getDriveSequence(primaryLetter: string = 'D', fallbackCount: number = 5, limitToDEOnly: boolean = false): string[] {
   const cleanLetter = (primaryLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+  if (limitToDEOnly) {
+    if (cleanLetter === 'E') return ['E', 'D'];
+    return ['D', 'E'];
+  }
+
   const startCode = cleanLetter.charCodeAt(0);
   const validStart = startCode >= 65 && startCode <= 90 ? startCode : 68;
   const count = Math.max(0, Math.min(20, typeof fallbackCount === 'number' ? fallbackCount : 5));
@@ -152,8 +313,16 @@ app.get('/api/system-status', (req, res) => {
   const isWindows = process.platform === 'win32';
   const driveLetter = (String(req.query.driveLetter || 'D')).toUpperCase().replace(/[^A-Z]/g, '') || 'D';
   const fallbackCount = parseInt(String(req.query.fallbackCount || '5'), 10) || 5;
-  const driveCandidates = getDriveSequence(driveLetter, fallbackCount);
-  const removableDrives = detectWindowsRemovableDrives();
+  const limitToDEOnly = req.query.limitToDEOnly === 'true' || req.query.limitToDEOnly === '1';
+  let driveCandidates = getDriveSequence(driveLetter, fallbackCount, limitToDEOnly);
+  if (limitToDEOnly) {
+    driveCandidates = driveCandidates.filter((d) => ['D', 'E'].includes(d.toUpperCase()));
+  }
+
+  let removableDrives = detectWindowsRemovableDrives();
+  if (limitToDEOnly) {
+    removableDrives = removableDrives.filter((r) => ['D', 'E'].includes(r.letter.toUpperCase()));
+  }
 
   let dDriveAccessible = false;
   const accessibleDrives: string[] = [];
@@ -193,6 +362,7 @@ app.get('/api/system-status', (req, res) => {
     accessibleDrives,
     removableDrives,
     driveSequence: driveCandidates,
+    limitToDEOnly,
     kioskMode: true,
   });
 });
@@ -200,7 +370,7 @@ app.get('/api/system-status', (req, res) => {
 // Copy file directly to configured drive/path with automatic fallback scanning
 app.post('/api/copy-to-d', async (req, res) => {
   try {
-    const { fileName, fileBase64, studentId, targetPath, driveLetter, folderName, fallbackDriveCount, autoDetectRemovable } = req.body;
+    const { fileName, fileBase64, studentId, targetPath, driveLetter, folderName, fallbackDriveCount, autoDetectRemovable, limitToDEOnly } = req.body;
     if (!fileName || !fileBase64) {
       return res.status(400).json({ success: false, error: 'שם קובץ ותוכן נדרשים' });
     }
@@ -211,11 +381,12 @@ app.post('/api/copy-to-d', async (req, res) => {
     const primaryLetter = (driveLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
     const fallbackCount = typeof fallbackDriveCount === 'number' ? fallbackDriveCount : 5;
     const shouldAutoDetect = autoDetectRemovable !== false;
+    const isLimitDE = Boolean(limitToDEOnly);
 
     // In Windows: first check for any connected Removable USB drives (if auto-detect enabled),
     // then check primary drive and fallback sequence
     if (process.platform === 'win32') {
-      const driveCandidates: string[] = [];
+      let driveCandidates: string[] = [];
 
       // 1. If autoDetect is enabled, prioritize all detected USB removable drives
       if (shouldAutoDetect) {
@@ -228,11 +399,16 @@ app.post('/api/copy-to-d', async (req, res) => {
       }
 
       // 2. Add primary drive and standard forward sequence
-      const forwardSeq = getDriveSequence(primaryLetter, fallbackCount);
+      const forwardSeq = getDriveSequence(primaryLetter, fallbackCount, isLimitDE);
       for (const d of forwardSeq) {
         if (!driveCandidates.includes(d)) {
           driveCandidates.push(d);
         }
+      }
+
+      // 3. Filter if limitToDEOnly is active
+      if (isLimitDE) {
+        driveCandidates = driveCandidates.filter((d) => ['D', 'E'].includes(d.toUpperCase()));
       }
 
       let savedPath = '';
@@ -269,6 +445,13 @@ app.post('/api/copy-to-d', async (req, res) => {
       }
 
       if (savedPath) {
+        // Record all-time persistent copy stat & update log file
+        try {
+          const stats = loadKioskStats();
+          stats.totalCopies += 1;
+          saveKioskStats(stats);
+        } catch {}
+
         const isFallback = savedDrive !== primaryLetter;
         let message = `הקובץ הועתק בהצלחה לדיסק און קי (${savedPath})`;
         if (isRemovableDrive) {
@@ -308,6 +491,13 @@ app.post('/api/copy-to-d', async (req, res) => {
     const targetFilePath = path.join(targetDir, safeFileName);
     fs.writeFileSync(targetFilePath, buffer);
 
+    // Record copy stat
+    try {
+      const stats = loadKioskStats();
+      stats.totalCopies += 1;
+      saveKioskStats(stats);
+    } catch {}
+
     return res.json({
       success: true,
       path: targetFilePath,
@@ -327,6 +517,51 @@ app.post('/api/copy-to-d', async (req, res) => {
       error: error.message || 'שגיאה במהלך העתקת הקובץ לכונן היעד',
     });
   }
+});
+
+// Stats API endpoints
+app.get('/api/stats', (req, res) => {
+  const stats = loadKioskStats();
+  res.json({ success: true, stats });
+});
+
+app.post('/api/stats/print', (req, res) => {
+  try {
+    const stats = loadKioskStats();
+    stats.totalPrints += 1;
+    saveKioskStats(stats);
+    console.log(`[Stats] Print counted. Total prints all-time: ${stats.totalPrints}`);
+    res.json({ success: true, totalPrints: stats.totalPrints, stats });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/stats/copy', (req, res) => {
+  try {
+    const stats = loadKioskStats();
+    stats.totalCopies += 1;
+    saveKioskStats(stats);
+    console.log(`[Stats] Copy counted. Total copies all-time: ${stats.totalCopies}`);
+    res.json({ success: true, totalCopies: stats.totalCopies, stats });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Full system shutdown endpoint (terminates backend, Electron, and all services)
+app.post('/api/system/shutdown', (req, res) => {
+  console.log('[System] Full shutdown requested by user. Terminating all kiosk processes and services...');
+  res.json({ success: true, message: 'סוגר ומכבה את כל שירותי העמדה...' });
+  setTimeout(() => {
+    try {
+      const electron = require('electron');
+      if (electron?.app) {
+        electron.app.quit();
+      }
+    } catch {}
+    process.exit(0);
+  }, 250);
 });
 
 // Decode Google Drive IVD state payload cleanly using VM context
@@ -587,7 +822,7 @@ app.get('/api/drive-thumbnail', async (req, res) => {
 // Local or Synced folder search with fallback drive scanning
 app.post('/api/local-folder-search', async (req, res) => {
   try {
-    const { studentId, rootPath, driveLetter, folderName, fallbackDriveCount } = req.body;
+    const { studentId, rootPath, driveLetter, folderName, fallbackDriveCount, limitToDEOnly } = req.body;
     if (!studentId) {
       return res.status(400).json({ error: 'studentId is required' });
     }
@@ -596,6 +831,7 @@ app.post('/api/local-folder-search', async (req, res) => {
     const folder = (folderName && String(folderName).trim()) || 'תורה דיליה';
     const primaryLetter = (driveLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
     const fallbackCount = typeof fallbackDriveCount === 'number' ? fallbackDriveCount : 5;
+    const isLimitDE = Boolean(limitToDEOnly);
 
     const candidatePaths: string[] = [];
     if (rootPath && typeof rootPath === 'string' && rootPath.trim()) {
@@ -603,7 +839,10 @@ app.post('/api/local-folder-search', async (req, res) => {
     }
 
     if (process.platform === 'win32') {
-      const driveCandidates = getDriveSequence(primaryLetter, fallbackCount);
+      let driveCandidates = getDriveSequence(primaryLetter, fallbackCount, isLimitDE);
+      if (isLimitDE) {
+        driveCandidates = driveCandidates.filter((d) => ['D', 'E'].includes(d.toUpperCase()));
+      }
       for (const d of driveCandidates) {
         candidatePaths.push(`${d}:\\${folder}`);
         candidatePaths.push(`${d}:\\`);

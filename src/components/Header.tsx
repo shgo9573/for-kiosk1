@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FolderCheck, Usb } from 'lucide-react';
+import { Clock, FolderCheck, Usb, Power } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { TorahLogo } from './TorahLogo';
 
 interface HeaderProps {
   config: KioskConfig;
   isDriveConnected: boolean;
+  onExit?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ config }) => {
+export const Header: React.FC<HeaderProps> = ({ config, onExit }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
 
   const targetPath =
@@ -78,6 +79,18 @@ export const Header: React.FC<HeaderProps> = ({ config }) => {
             </>
           )}
         </div>
+
+        {onExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs shadow-sm transition cursor-pointer border border-red-500"
+            title="יציאה מהתוכנה וכיבוי כל השירותים"
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>יציאה מהתוכנה</span>
+          </button>
+        )}
       </div>
     </header>
   );

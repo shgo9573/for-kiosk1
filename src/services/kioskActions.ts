@@ -8,9 +8,35 @@ export interface CopyTargetConfig {
   fullPath?: string;
   fallbackDriveCount?: number;
   autoDetectRemovable?: boolean;
+  limitToDEOnly?: boolean;
 }
 
 export class KioskActionService {
+  /**
+   * Shutdown entire system and services
+   */
+  static async shutdownSystem(): Promise<boolean> {
+    try {
+      const response = await fetch('/api/system/shutdown', { method: 'POST' });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Fetch live all-time kiosk usage stats
+   */
+  static async getStats(): Promise<{ totalPrints: number; totalCopies: number } | null> {
+    try {
+      const res = await fetch('/api/stats');
+      if (res.ok) {
+        const data = await res.json();
+        return data.stats;
+      }
+    } catch {}
+    return null;
+  }
   /**
    * Render Word document to HTML for preview and printing.
    */
@@ -142,6 +168,9 @@ export class KioskActionService {
         }, 5000);
       }
 
+      // Trigger persistent print stat recording
+      fetch('/api/stats/print', { method: 'POST' }).catch(() => {});
+
       return {
         success: true,
         message: `פקודת ההדפסה עבור "${file.name}" נשלחה למדפסת`,
@@ -185,6 +214,7 @@ export class KioskActionService {
           targetPath: displayTarget,
           fallbackDriveCount: targetConfig?.fallbackDriveCount ?? 5,
           autoDetectRemovable: targetConfig?.autoDetectRemovable ?? true,
+          limitToDEOnly: targetConfig?.limitToDEOnly ?? false,
         }),
       });
 

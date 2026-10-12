@@ -2,8 +2,17 @@
  * Computes a list of drive letters to scan starting from primaryLetter
  * up to fallbackCount letters forward (e.g. 'D' + 5 => ['D', 'E', 'F', 'G', 'H', 'I']).
  */
-export function getDriveSequence(primaryLetter: string = 'D', fallbackCount: number = 5): string[] {
+export function getDriveSequence(
+  primaryLetter: string = 'D',
+  fallbackCount: number = 5,
+  limitToDEOnly: boolean = false
+): string[] {
   const cleanLetter = (primaryLetter || 'D').toUpperCase().replace(/[^A-Z]/g, '') || 'D';
+  if (limitToDEOnly) {
+    if (cleanLetter === 'E') return ['E', 'D'];
+    return ['D', 'E'];
+  }
+
   const startCode = cleanLetter.charCodeAt(0);
   const validStart = startCode >= 65 && startCode <= 90 ? startCode : 68; // 68 = 'D'
   const count = Math.max(0, Math.min(20, typeof fallbackCount === 'number' ? fallbackCount : 5));

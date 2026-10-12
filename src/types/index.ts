@@ -30,7 +30,15 @@ export interface KioskConfig {
   dDriveTargetPath: string;   // Full path e.g. 'D:\תורה דיליה'
   fallbackDriveCount: number; // Number of fallback drive letters to scan forward (default: 5)
   autoDetectRemovableDrive: boolean; // Auto-detect USB flash drive (DriveType=2)
+  limitToDEOnly?: boolean; // Restrict scanning to drives D: and E: only, never F: or above
   kioskLockFullscreen: boolean;
+}
+
+export interface KioskStats {
+  totalPrints: number;
+  totalCopies: number;
+  firstRunTimestamp?: string;
+  lastUpdatedTimestamp?: string;
 }
 
 export interface PrintJobState {

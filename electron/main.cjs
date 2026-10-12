@@ -36,7 +36,34 @@ function writeLog(tag, ...args) {
   for (const dir of candidateLogDirs) {
     try {
       const target = path.join(dir, 'kiosk-debug.log');
-      fs.appendFileSync(target, line, 'utf8');
+      if (!fs.existsSync(target)) {
+        fs.appendFileSync(target, line, 'utf8');
+        continue;
+      }
+
+      let content = fs.readFileSync(target, 'utf8');
+      const possiblePatterns = [
+        '============================================================\n=== [סיכום פעילות עמדה מצטבר',
+        '=== [סיכום פעילות עמדה מצטבר',
+        '=== [סטטיסטיקת עמדה מצטברת',
+      ];
+
+      let foundIdx = -1;
+      for (const pattern of possiblePatterns) {
+        const idx = content.indexOf(pattern);
+        if (idx !== -1) {
+          foundIdx = idx;
+          break;
+        }
+      }
+
+      if (foundIdx !== -1) {
+        // Insert log line before stats block so stats block stays strictly at the bottom
+        content = content.substring(0, foundIdx) + line + content.substring(foundIdx);
+        fs.writeFileSync(target, content, 'utf8');
+      } else {
+        fs.appendFileSync(target, line, 'utf8');
+      }
     } catch (err) {}
   }
 
@@ -182,7 +209,12 @@ function startServerProcess() {
     });
 
     serverProcess.on('exit', (code, signal) => {
-      writeLog('WARN', `Server child process exited (code=${code}, signal=${signal})`);
+      writeLog('WARN', `Server child process exited (code=${code}, signal=${signal}). Shutting down Electron and exiting.`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.destroy();
+      }
+      app.quit();
+      process.exit(0);
     });
   } catch (forkErr) {
     writeLog('FATAL', 'Could not fork server child process:', forkErr);
@@ -296,8 +328,13 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
-    writeLog('WINDOW', 'Main window closed by user.');
+    writeLog('WINDOW', 'Main window closed by user. Terminating server and exiting application.');
     mainWindow = null;
+    if (serverProcess) {
+      try { serverProcess.kill(); } catch {}
+    }
+    app.quit();
+    process.exit(0);
   });
 }
 
@@ -320,9 +357,8 @@ app.on('window-all-closed', () => {
   if (serverProcess) {
     try { serverProcess.kill(); } catch {}
   }
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
+  process.exit(0);
 });
 
 app.on('before-quit', () => {

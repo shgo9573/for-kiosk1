@@ -14,6 +14,7 @@ import { GoogleDriveService } from './services/googleDrive';
 import { KioskActionService } from './services/kioskActions';
 import { initAuth, getAccessToken, auth } from './services/firebaseAuth';
 import { User } from 'firebase/auth';
+import { Power } from 'lucide-react';
 
 const DEFAULT_CONFIG: KioskConfig = {
   mode: 'drive',
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: KioskConfig = {
   dDriveTargetPath: 'D:\\תורה דיליה',
   fallbackDriveCount: 5,
   autoDetectRemovableDrive: true,
+  limitToDEOnly: false,
   kioskLockFullscreen: true,
 };
 
@@ -43,6 +45,7 @@ export default function App() {
           targetFolderName: parsed.targetFolderName || 'תורה דיליה',
           fallbackDriveCount: typeof parsed.fallbackDriveCount === 'number' ? parsed.fallbackDriveCount : 5,
           autoDetectRemovableDrive: parsed.autoDetectRemovableDrive !== false,
+          limitToDEOnly: parsed.limitToDEOnly ?? false,
           dDriveTargetPath:
             parsed.dDriveTargetPath ||
             `${parsed.targetDriveLetter || 'D'}:\\${parsed.targetFolderName || 'תורה דיליה'}`,
@@ -66,6 +69,10 @@ export default function App() {
 
   // Admin Modal state
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
+
+  // Exit & Shutdown Modal state
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState<boolean>(false);
+  const [isShuttingDown, setIsShuttingDown] = useState<boolean>(false);
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -193,6 +200,7 @@ export default function App() {
         fullPath: targetDrivePath,
         fallbackDriveCount: config.fallbackDriveCount ?? 5,
         autoDetectRemovable: config.autoDetectRemovableDrive ?? true,
+        limitToDEOnly: config.limitToDEOnly ?? false,
       });
       if (res.success) {
         setCopiedFileIds((prev) => new Set(prev).add(file.id));
@@ -239,6 +247,7 @@ export default function App() {
           fullPath: targetDrivePath,
           fallbackDriveCount: config.fallbackDriveCount ?? 5,
           autoDetectRemovable: config.autoDetectRemovableDrive ?? true,
+          limitToDEOnly: config.limitToDEOnly ?? false,
         });
         if (res.success) {
           setCopiedFileIds((prev) => new Set(prev).add(file.id));
@@ -257,6 +266,18 @@ export default function App() {
       message: `${successCount} מתוך ${wordFiles.length} קבצים הועתקו בהצלחה`,
       actionType: 'copy',
     });
+  };
+
+  const handleConfirmExit = async () => {
+    setIsShuttingDown(true);
+    try {
+      await KioskActionService.shutdownSystem();
+    } catch {}
+    setTimeout(() => {
+      try {
+        window.close();
+      } catch {}
+    }, 600);
   };
 
   const handleBackToEntry = () => {
@@ -297,6 +318,7 @@ export default function App() {
       <Header
         config={config}
         isDriveConnected={isDriveConnected}
+        onExit={() => setIsExitConfirmOpen(true)}
       />
 
       {/* Main Workstation Screen */}
@@ -347,14 +369,82 @@ export default function App() {
 
       {/* Bottom Status Bar */}
       <footer className="bg-white border-t border-slate-200 px-8 py-2 flex items-center justify-between text-xs text-slate-500 select-none shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-          <span className="font-semibold text-slate-700">תורה דיליה</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            <span className="font-semibold text-slate-700">תורה דיליה</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsExitConfirmOpen(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-900 border border-red-200 text-[11px] font-bold transition cursor-pointer"
+            title="סגירת התוכנה וכיבוי כל השירותים"
+          >
+            <Power className="w-3 h-3 text-red-600" />
+            <span>יציאה וכיבוי</span>
+          </button>
         </div>
         <div className="font-mono text-slate-600 font-medium" dir="ltr">
           {targetDrivePath}
         </div>
       </footer>
+
+      {/* Exit & Shutdown Confirmation Modal */}
+      {isExitConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+          <div className="bg-white border-2 border-red-400 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-red-100 border border-red-200 flex items-center justify-center shrink-0">
+                <Power className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 font-serif">
+                  יציאה וכיבוי מלא של המערכת
+                </h3>
+                <p className="text-xs text-slate-500">
+                  סגירת התוכנה וכיבוי כל שירותי הרקע
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-red-50/70 border border-red-200/80 rounded-xl text-xs text-slate-700 leading-relaxed space-y-1.5">
+              <p className="font-semibold text-red-900">
+                האם אתה בטוח שברצונך לצאת מהתוכנה ולכבות את כל השירות?
+              </p>
+              <p className="text-slate-600 text-[11px]">
+                פעולה זו תכבה לחלוטין את שרת העמדה ברקע, תסגור את חלון התוכנה ותפסיק את כל הפעילות עד להפעלה הבאה.
+              </p>
+            </div>
+
+            {isShuttingDown ? (
+              <div className="py-3 flex flex-col items-center justify-center gap-2 text-center text-slate-700">
+                <div className="w-8 h-8 border-3 border-red-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-bold text-red-700">
+                  מכבה את כל שירותי העמדה וסוגר את התוכנה...
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExitConfirmOpen(false)}
+                  className="px-5 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition cursor-pointer"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmExit}
+                  className="px-6 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs shadow-md transition flex items-center gap-2 cursor-pointer border border-red-700"
+                >
+                  <Power className="w-4 h-4" />
+                  <span>כן, כבה את המערכת כעת</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
