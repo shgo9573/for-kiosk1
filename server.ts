@@ -962,19 +962,18 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ ok: true });
 });
 
-// Auto-exit when standalone kiosk window is closed (with safe initial grace period)
-// If --service or --no-exit or running in kiosk environment, keep alive
-const noAutoExit =
-  process.argv.includes('--no-exit') ||
-  process.argv.includes('--safer') ||
+// Auto-exit when kiosk window is closed (prevents background zombie processes from blocking ports)
+const isExplicitService =
   process.argv.includes('--service') ||
-  process.env['KIOSK_NO_AUTO_EXIT'] === '1';
+  process.argv.includes('--no-exit') ||
+  process.env['KIOSK_NO_AUTO_EXIT'] === '1' ||
+  process.env['KIOSK_DEV'] === '1';
 
-if ((process as any).pkg && !noAutoExit) {
+if (!isExplicitService) {
   setInterval(() => {
-    // 45 seconds tolerance for slow kiosk initial render or user switching
-    if (hasConnected && Date.now() - lastHeartbeat > 45000) {
-      console.log('[Kiosk Server] Client window closed, exiting.');
+    // 35 seconds tolerance for slow kiosk initial render or user switching
+    if (hasConnected && Date.now() - lastHeartbeat > 35000) {
+      console.log('[Kiosk Server] Client window closed or disconnected for 35s. Exiting cleanly to free background resources and ports.');
       process.exit(0);
     }
   }, 5000);

@@ -2,10 +2,17 @@ const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { fork } = require('child_process');
+const { fork, execSync } = require('child_process');
 
 process.env['NODE_ENV'] = 'production';
 process.env['KIOSK_NO_BROWSER'] = '1';
+
+// Disable hardware acceleration to prevent silent GPU crashes on low-spec kiosk PCs
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
 
 // Determine multiple candidate log directories to guarantee writing succeeds
 const candidateLogDirs = [
@@ -122,24 +129,53 @@ let activeServerUrl = `http://127.0.0.1:${activePort}`;
 writeLog('INSTANCE', 'Checking SingleInstanceLock...');
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  writeLog('WARN', 'Another instance of ToraDelia-Kiosk is already running! Exiting duplicate process.');
+  writeLog('WARN', 'Another instance of ToraDelia-Kiosk was detected in the background.');
+  
+  let userChoice = 0;
   try {
-    dialog.showMessageBoxSync({
+    userChoice = dialog.showMessageBoxSync({
       type: 'warning',
-      title: 'תורה דיליה - התוכנה כבר פועלת',
-      message: 'עמדת תורה דיליה כבר פועלת ברקע במחשב זה.\nאם החלון אינו מוצג, בדוק במנהל המשימות (Task Manager) וסגור תהליכים קודמים.',
+      buttons: ['סגור תהליכים קודמים והפעל מחדש (מומלץ)', 'ביטול'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'תורה דיליה - התוכנה כבר פועלת ברקע',
+      message: 'עמדת תורה דיליה כבר פועלת או נותרה ברקע במחשב זה.\nאם החלון אינו נפתח, ייתכן שתהליך קודם נתקע.\n\nהאם ברצונך לסגור תהליכים ישנים ולהפעיל את התוכנה מחדש?',
     });
-  } catch {}
+  } catch (err) {
+    writeLog('WARN', 'Dialog could not be shown:', err);
+  }
+
+  if (userChoice === 0) {
+    writeLog('INSTANCE', 'User chose to force restart. Killing previous hung processes...');
+    if (process.platform === 'win32') {
+      try {
+        execSync(`taskkill /F /FI "PID ne ${process.pid}" /IM ToraDelia-Kiosk.exe /T`, { stdio: 'ignore' });
+        execSync(`taskkill /F /FI "PID ne ${process.pid}" /IM TorahKiosk-Standalone-130MB.exe /T`, { stdio: 'ignore' });
+        execSync(`taskkill /F /FI "PID ne ${process.pid}" /IM TorahKiosk.exe /T`, { stdio: 'ignore' });
+      } catch (kErr) {
+        writeLog('WARN', 'Taskkill error:', kErr);
+      }
+    }
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+
   app.quit();
   process.exit(0);
 }
 writeLog('INSTANCE', 'SingleInstanceLock acquired successfully.');
 
 app.on('second-instance', () => {
-  writeLog('INSTANCE', 'Second instance attempted to launch. Focusing existing main window.');
+  writeLog('INSTANCE', 'Second instance attempted to launch. Bringing existing main window to front.');
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.setAlwaysOnTop(false);
+  } else {
+    createWindow();
   }
 });
 
@@ -222,9 +258,9 @@ function startServerProcess() {
 }
 
 // 2. Poll server until active
-function waitForServer(callback, maxAttempts = 60) {
+function waitForServer(callback, maxAttempts = 75) {
   let attempts = 0;
-  const candidatePorts = [3000, 3001, 3002];
+  const candidatePorts = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010];
 
   const checkPort = (portIdx) => {
     const port = candidatePorts[portIdx];

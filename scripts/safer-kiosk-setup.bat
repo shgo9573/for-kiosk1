@@ -10,6 +10,9 @@ title תורה דיליה - עמדת קיוסק סייפר עצמאית
 
 cd /d "%~dp0"
 
+:: ניקוי תהליכים ישנים שנתקעו ברקע מהפעלה קודמת (מונע נעילת פורטים ותקיעות)
+taskkill /F /IM "TorahKiosk.exe" /T >nul 2>&1
+
 :: 1. בדיקה אם קיימת אפליקציה עצמאית מובנית (Electron Standalone ~130MB)
 set "STANDALONE_EXE="
 if exist "ToraDelia-Kiosk.exe" set "STANDALONE_EXE=%~dp0ToraDelia-Kiosk.exe"
