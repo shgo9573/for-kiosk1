@@ -19,11 +19,13 @@ import {
   FileCode,
   Power,
   BarChart3,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { GoogleDriveService } from '../services/googleDrive';
 import { googleSignIn, logout } from '../services/firebaseAuth';
 import { getDriveSequence } from '../utils/driveHelpers';
+import { getTargetSpreadsheetId, DEFAULT_SPREADSHEET_ID } from '../services/googleSheets';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -60,6 +62,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Settings state
   const [rootFolderId, setRootFolderId] = useState(config.rootFolderId);
   const [rootFolderName, setRootFolderName] = useState(config.rootFolderName);
+  const [spreadsheetId, setSpreadsheetId] = useState<string>(getTargetSpreadsheetId());
   const [autoLogoutSeconds, setAutoLogoutSeconds] = useState(config.autoLogoutSeconds);
   const [mode, setMode] = useState<'drive' | 'demo'>(config.mode);
 
@@ -90,6 +93,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [, setDriveFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [, setIsLoadingFolders] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const fetchStats = async () => {
@@ -166,14 +170,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const handleGoogleLogin = async () => {
     setIsSigningIn(true);
+    setLoginError(null);
     try {
       const res = await googleSignIn();
       if (res) {
         onDriveStateChanged();
         await loadFolders();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Sign in failed:', err);
+      setLoginError(err?.message || 'ההתחברות לחשבון Google נכשלה');
     } finally {
       setIsSigningIn(false);
     }
@@ -213,6 +219,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       autoDetectRemovableDrive,
       limitToDEOnly,
     });
+    if (spreadsheetId && spreadsheetId.trim()) {
+      try {
+        localStorage.setItem('kiosk_spreadsheet_id', spreadsheetId.trim());
+      } catch {}
+    }
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);
@@ -520,14 +531,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               </div>
             </div>
 
-            {/* 2. Google Drive Account */}
+            {/* 2. Google Account (Drive & Sheets) */}
             <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
               <h4 className="text-xs font-bold text-slate-900 mb-1 flex items-center gap-2">
                 <FolderOpen className="w-3.5 h-3.5 text-[#0f1d38]" />
-                <span>חיבור חשבון גוגל דרייב</span>
+                <span>חיבור חשבון Google מנהל (Google Drive ו-Google Sheets)</span>
               </h4>
               <p className="text-xs text-slate-500 mb-3">
-                המערכת פונה לתיקיית תורה דיליה הראשית שמכילה את כל תיקיות התלמידים.
+                חשבון זה מאפשר לעמדה גישה לתיקיית הקבצים בדרייב ורישום תלמידים ישיר לגיליון Google Sheets.
               </p>
 
               {isDriveConnected ? (
@@ -535,7 +546,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <div>
-                      <div className="text-xs font-bold text-slate-800">מחובר לגוגל דרייב</div>
+                      <div className="text-xs font-bold text-slate-800">מחובר לחשבון Google מורשה</div>
                       <div className="text-xs font-mono text-slate-500">{userEmail || 'חשבון מאומת'}</div>
                     </div>
                   </div>
@@ -561,8 +572,57 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
                       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
                     </svg>
-                    <span>{isSigningIn ? 'מתחבר לחשבון...' : 'התחבר עם גוגל דרייב (Google Drive)'}</span>
+                    <span>{isSigningIn ? 'מתחבר לחשבון...' : 'התחבר עם חשבון Google מנהל (Drive & Sheets)'}</span>
                   </button>
+
+                  {loginError && (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
+                      <div className="font-bold mb-1 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>שגיאת התחברות לחשבון Google</span>
+                      </div>
+                      <div className="text-[11px] font-mono break-all">{loginError}</div>
+                    </div>
+                  )}
+
+                  {/* 403 access_denied explanation & solution card */}
+                  <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-900 space-y-2.5">
+                    <div className="flex items-start gap-2 font-bold text-amber-950">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <div>נתקלת בשגיאה 403 (access_denied) עם המייל shichati2@gmail.com?</div>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      מאחר והאפליקציה ב-Google Cloud נמצאת כרגע במצב בדיקה (Testing), גוגל מאפשרת כניסה רק לחשבונות שהוגדרו מראש כ<strong>&quot;משתמשי בדיקה&quot; (Test users)</strong>.
+                    </p>
+                    <div className="bg-white p-3 rounded-lg border border-amber-200/90 text-[11px] space-y-1.5 shadow-2xs">
+                      <div className="font-bold text-slate-800">הוראות פשוטות להוספת המייל ב-Google Cloud (30 שניות):</div>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-700">
+                        <li>
+                          פתח את{' '}
+                          <a
+                            href="https://console.cloud.google.com/apis/credentials/consent?project=gen-cackup"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-700 font-bold underline hover:text-blue-900"
+                          >
+                            מסך ההרשאות ב-Google Cloud (לחץ לפתיחה ישירה) ↗
+                          </a>
+                        </li>
+                        <li>גלול למטה למקטע <strong>משתמשי בדיקה (Test users)</strong></li>
+                        <li>לחץ על <strong>+ ADD USERS (+ הוספת משתמשים)</strong></li>
+                        <li>
+                          הזן את המייל:{' '}
+                          <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-900" dir="ltr">
+                            shichati2@gmail.com
+                          </code>
+                        </li>
+                        <li>לחץ על <strong>Save (שמור)</strong></li>
+                      </ol>
+                    </div>
+                    <div className="text-[10px] text-amber-700 font-medium">
+                      * לחלופין, ניתן ללחוץ על כפתור <strong>&quot;PUBLISH APP&quot; (פרסם אפליקציה)</strong> באותו מסך כדי לאפשר כניסה לכל חשבון.
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -579,6 +639,47 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 placeholder="1CXFm0VyVtSZIqONXJYMmIu0hJyxUqj2B"
                 className="w-full h-10 px-3 rounded bg-white border border-slate-300 text-xs font-mono text-slate-800 placeholder-slate-400 outline-none focus:border-[#0f1d38]"
               />
+            </div>
+
+            {/* 3.1. Google Sheets Student Registration Spreadsheet */}
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>גיליון רישום תלמידים (Google Sheets)</span>
+                </h4>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                  פעיל
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                מזהה גיליון Google Sheets אליו נרשמים תלמידים חדשים (שם, ת.ז. וועד):
+              </p>
+              <input
+                type="text"
+                value={spreadsheetId}
+                onChange={(e) => setSpreadsheetId(e.target.value.trim())}
+                placeholder={DEFAULT_SPREADSHEET_ID}
+                className="w-full h-10 px-3 rounded bg-white border border-slate-300 text-xs font-mono text-slate-800 placeholder-slate-400 outline-none focus:border-[#0f1d38]"
+                dir="ltr"
+              />
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setSpreadsheetId(DEFAULT_SPREADSHEET_ID)}
+                  className="text-slate-500 hover:text-slate-800 transition underline cursor-pointer"
+                >
+                  שחזר למזהה ברירת המחדל
+                </button>
+                <a
+                  href={`https://docs.google.com/spreadsheets/d/${spreadsheetId || DEFAULT_SPREADSHEET_ID}/edit`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-700 hover:text-emerald-900 font-medium underline"
+                >
+                  צפה בגיליון ב-Google Sheets ↗
+                </a>
+              </div>
             </div>
 
             {/* 4. Inactivity Auto-Reset */}

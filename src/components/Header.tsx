@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FolderCheck, Usb, Power } from 'lucide-react';
+import { Clock, FolderCheck, Usb, UserPlus } from 'lucide-react';
 import { KioskConfig } from '../types';
 import { TorahLogo } from './TorahLogo';
 
 interface HeaderProps {
   config: KioskConfig;
   isDriveConnected: boolean;
-  onExit?: () => void;
+  onOpenRegistration?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ config, onExit }) => {
+export const Header: React.FC<HeaderProps> = ({ config, onOpenRegistration }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
 
   const targetPath =
@@ -80,15 +80,15 @@ export const Header: React.FC<HeaderProps> = ({ config, onExit }) => {
           )}
         </div>
 
-        {onExit && (
+        {onOpenRegistration && (
           <button
             type="button"
-            onClick={onExit}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs shadow-sm transition cursor-pointer border border-red-500"
-            title="יציאה מהתוכנה וכיבוי כל השירותים"
+            onClick={onOpenRegistration}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs shadow-sm transition cursor-pointer border border-emerald-500"
+            title="רישום תלמיד חדש בגיליון Google Sheets"
           >
-            <Power className="w-3.5 h-3.5" />
-            <span>יציאה מהתוכנה</span>
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>רישום תלמיד</span>
           </button>
         )}
       </div>

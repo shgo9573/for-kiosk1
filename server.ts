@@ -363,7 +363,7 @@ app.get('/api/system-status', (req, res) => {
     removableDrives,
     driveSequence: driveCandidates,
     limitToDEOnly,
-    kioskMode: true,
+    kioskMode: false,
   });
 });
 

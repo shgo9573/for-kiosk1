@@ -299,19 +299,23 @@ function waitForServer(callback, maxAttempts = 75) {
   checkPort(0);
 }
 
-// 3. Create native kiosk window
+// 3. Create native standard window (kiosk mode disabled)
 function createWindow() {
-  writeLog('WINDOW', 'Creating application window...');
+  writeLog('WINDOW', 'Creating standard desktop application window (kiosk mode disabled)...');
   Menu.setApplicationMenu(null);
-
-  const isKiosk = !process.argv.includes('--windowed');
-  writeLog('WINDOW', `Window mode: ${isKiosk ? 'Kiosk (Fullscreen)' : 'Windowed'}`);
 
   mainWindow = new BrowserWindow({
     width: 1366,
-    height: 768,
-    kiosk: isKiosk,
-    fullscreen: isKiosk,
+    height: 820,
+    minWidth: 1024,
+    minHeight: 640,
+    kiosk: false,
+    fullscreen: false,
+    frame: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    closable: true,
     center: true,
     show: true,
     autoHideMenuBar: true,
@@ -337,25 +341,29 @@ function createWindow() {
     }, 1000);
   });
 
-  // Prevent navigation away from the local kiosk application
+  // Allow OAuth/Google auth navigation while blocking untrusted external navigation
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) {
+    if (
+      !url.startsWith('http://127.0.0.1') &&
+      !url.startsWith('http://localhost') &&
+      !url.includes('accounts.google.com') &&
+      !url.includes('firebaseapp.com')
+    ) {
       writeLog('SECURITY', `Blocked external navigation attempt to: ${url}`);
       event.preventDefault();
     }
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => {
-    return { action: 'deny' };
-  });
-
-  // Allow Esc key to exit fullscreen in windowed mode
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.key === 'Escape' && input.type === 'keyDown') {
-      if (mainWindow.isFullScreen() && process.argv.includes('--windowed')) {
-        mainWindow.setFullScreen(false);
-      }
+  // Allow Google OAuth login popups for Drive & Sheets auth
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (
+      url.includes('accounts.google.com') ||
+      url.includes('firebaseapp.com') ||
+      url.includes('google.com/o/oauth2')
+    ) {
+      return { action: 'allow' };
     }
+    return { action: 'deny' };
   });
 
   writeLog('WINDOW', `Loading application URL: ${activeServerUrl}`);
@@ -363,8 +371,16 @@ function createWindow() {
     writeLog('ERROR', 'Initial loadURL caught error:', err);
   });
 
+  // When user clicks [X], completely terminate server and app immediately
+  mainWindow.on('close', () => {
+    writeLog('WINDOW', 'Main window close event triggered (user clicked X). Terminating server process and exiting...');
+    if (serverProcess) {
+      try { serverProcess.kill(); } catch {}
+    }
+  });
+
   mainWindow.on('closed', () => {
-    writeLog('WINDOW', 'Main window closed by user. Terminating server and exiting application.');
+    writeLog('WINDOW', 'Main window closed. Exiting application.');
     mainWindow = null;
     if (serverProcess) {
       try { serverProcess.kill(); } catch {}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, UserPlus, ArrowLeft } from 'lucide-react';
 import { NumericKeypad } from './NumericKeypad';
 import { SegmentedIdInput } from './SegmentedIdInput';
 import { TorahLogo } from './TorahLogo';
@@ -10,6 +10,7 @@ interface IdEntryScreenProps {
   errorMessage: string | null;
   onClearError: () => void;
   isDriveConnected?: boolean;
+  onOpenRegistration?: (currentId?: string) => void;
 }
 
 export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
@@ -17,6 +18,7 @@ export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
   isLoading,
   errorMessage,
   onClearError,
+  onOpenRegistration,
 }) => {
   const [idInput, setIdInput] = useState<string>('');
 
@@ -97,9 +99,21 @@ export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
 
           {/* Error message */}
           {errorMessage && (
-            <div className="mt-2.5 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-              <span className="font-medium">{errorMessage}</span>
+            <div className="mt-2.5 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="font-medium">{errorMessage}</span>
+              </div>
+              {onOpenRegistration && (
+                <button
+                  type="button"
+                  onClick={() => onOpenRegistration(idInput)}
+                  className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-red-300 text-red-800 hover:bg-red-50 text-[11px] font-bold shadow-2xs transition cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-red-600" />
+                  <span>לא רשום עדיין בישיבה? לחץ כאן לרישום תלמיד</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -112,6 +126,20 @@ export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
           onSubmit={handleSubmit}
           disabled={isLoading}
         />
+
+        {/* Dedicated Registration Button */}
+        {onOpenRegistration && (
+          <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => onOpenRegistration(idInput)}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-emerald-50 active:bg-emerald-100 border border-slate-200 hover:border-emerald-300 text-slate-800 hover:text-emerald-900 text-xs font-bold transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer group"
+            >
+              <UserPlus className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+              <span>רישום תלמיד חדש בגיליון הישיבה</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
