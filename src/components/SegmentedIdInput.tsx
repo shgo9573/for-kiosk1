@@ -25,6 +25,8 @@ export const SegmentedIdInput: React.FC<SegmentedIdInputProps> = ({
   useEffect(() => {
     if (autoFocus && !disabled) {
       hiddenInputRef.current?.focus();
+      const t = setTimeout(() => hiddenInputRef.current?.focus(), 80);
+      return () => clearTimeout(t);
     }
   }, [autoFocus, disabled]);
 
@@ -40,7 +42,7 @@ export const SegmentedIdInput: React.FC<SegmentedIdInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
       e.preventDefault();
       onSubmit();
     }
@@ -72,7 +74,7 @@ export const SegmentedIdInput: React.FC<SegmentedIdInputProps> = ({
         onKeyDown={handleKeyDown}
         disabled={disabled || isLoading}
         maxLength={maxLength}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-text pointer-events-auto z-10"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-text pointer-events-auto z-10 segmented-id-hidden-input"
         aria-label="מספר תעודת זהות"
         autoComplete="off"
       />

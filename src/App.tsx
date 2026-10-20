@@ -347,6 +347,7 @@ export default function App() {
             onClearError={() => setErrorMessage(null)}
             isDriveConnected={isDriveConnected}
             onOpenRegistration={handleOpenRegistration}
+            isModalOpen={isAdminOpen || isRegisterOpen}
           />
         ) : (
           currentFolder && (

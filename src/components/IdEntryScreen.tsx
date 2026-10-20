@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertCircle, UserPlus, ArrowLeft } from 'lucide-react';
 import { NumericKeypad } from './NumericKeypad';
 import { SegmentedIdInput } from './SegmentedIdInput';
@@ -11,6 +11,7 @@ interface IdEntryScreenProps {
   onClearError: () => void;
   isDriveConnected?: boolean;
   onOpenRegistration?: (currentId?: string) => void;
+  isModalOpen?: boolean;
 }
 
 export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
@@ -19,54 +20,163 @@ export const IdEntryScreen: React.FC<IdEntryScreenProps> = ({
   errorMessage,
   onClearError,
   onOpenRegistration,
+  isModalOpen = false,
 }) => {
   const [idInput, setIdInput] = useState<string>('');
+  const idInputRef = useRef<string>('');
+  idInputRef.current = idInput;
 
-  const triggerAutoSearch = (fullId: string) => {
+  const triggerAutoSearch = useCallback((fullId: string) => {
     if (!isLoading && fullId.trim().length === 9) {
       setTimeout(() => {
         onSearch(fullId.trim());
       }, 80);
     }
-  };
+  }, [isLoading, onSearch]);
 
-  const handleDigit = (digit: string) => {
+  const handleDigit = useCallback((digit: string) => {
     if (isLoading) return;
-    if (idInput.length < 9) {
+    const current = idInputRef.current;
+    if (current.length < 9) {
       if (errorMessage) onClearError();
-      const next = idInput + digit;
+      const next = current + digit;
       setIdInput(next);
       if (next.length === 9) {
         triggerAutoSearch(next);
       }
     }
-  };
+  }, [isLoading, errorMessage, onClearError, triggerAutoSearch]);
 
-  const handleBackspace = () => {
+  const handleBackspace = useCallback(() => {
     if (isLoading) return;
     if (errorMessage) onClearError();
     setIdInput((prev) => prev.slice(0, -1));
-  };
+  }, [isLoading, errorMessage, onClearError]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (isLoading) return;
     if (errorMessage) onClearError();
     setIdInput('');
-  };
+  }, [isLoading, errorMessage, onClearError]);
 
-  const handleSubmit = async () => {
-    if (!idInput.trim() || isLoading) return;
-    await onSearch(idInput.trim());
-  };
+  const handleSubmit = useCallback(async () => {
+    const current = idInputRef.current;
+    if (!current.trim() || isLoading) return;
+    await onSearch(current.trim());
+  }, [isLoading, onSearch]);
 
-  const handleInputChange = (val: string) => {
+  const handleInputChange = useCallback((val: string) => {
     if (isLoading) return;
     setIdInput(val);
     if (errorMessage) onClearError();
     if (val.length === 9) {
       triggerAutoSearch(val);
     }
-  };
+  }, [isLoading, errorMessage, onClearError, triggerAutoSearch]);
+
+  // Global physical keyboard listener & automatic input focusing
+  // Whenever the software is open on the home screen, typing a number immediately enters it into the ID field
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept if a modal (registration, admin) is active or system is loading
+      if (isModalOpen || isLoading) return;
+
+      // If active element is an input/textarea outside the ID field, ignore
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT') &&
+        !activeEl.classList.contains('segmented-id-hidden-input')
+      ) {
+        return;
+      }
+
+      // If Alt, Ctrl, or Meta (Command/Windows) keys are pressed (e.g. shortcuts), ignore
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+      // Extract digit from key or code (supports standard numbers, Hebrew layout, and Numpad with NumLock ON or OFF)
+      let digit: string | null = null;
+      if (/^[0-9]$/.test(e.key)) {
+        digit = e.key;
+      } else if (e.code && /^Digit([0-9])$/.test(e.code)) {
+        digit = e.code.replace('Digit', '');
+      } else if (e.code && /^Numpad([0-9])$/.test(e.code)) {
+        digit = e.code.replace('Numpad', '');
+      }
+
+      if (digit !== null) {
+        e.preventDefault();
+        const hiddenInput = document.querySelector<HTMLInputElement>('.segmented-id-hidden-input');
+        if (hiddenInput && document.activeElement !== hiddenInput) {
+          hiddenInput.focus();
+        }
+        handleDigit(digit);
+        return;
+      }
+
+      if (e.key === 'Backspace' || e.code === 'Backspace') {
+        e.preventDefault();
+        handleBackspace();
+        return;
+      }
+
+      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+
+      if (e.key === 'Escape' || e.key === 'Delete' || e.code === 'Escape' || e.code === 'Delete') {
+        e.preventDefault();
+        handleClear();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [isModalOpen, isLoading, handleDigit, handleBackspace, handleClear, handleSubmit]);
+
+  // Keep ID input focused automatically whenever the home screen is active
+  useEffect(() => {
+    const focusIdInput = () => {
+      if (!isModalOpen && !isLoading) {
+        const hiddenInput = document.querySelector<HTMLInputElement>('.segmented-id-hidden-input');
+        hiddenInput?.focus();
+      }
+    };
+
+    const handleDocumentPointer = (e: Event) => {
+      if (isModalOpen || isLoading) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (
+        target.closest('button') ||
+        target.closest('a') ||
+        target.closest('textarea') ||
+        target.closest('select') ||
+        (target.closest('input') && !target.classList.contains('segmented-id-hidden-input'))
+      ) {
+        return;
+      }
+      focusIdInput();
+    };
+
+    window.addEventListener('focus', focusIdInput);
+    document.addEventListener('pointerdown', handleDocumentPointer);
+    
+    // Focus immediately on mount and after a short tick
+    focusIdInput();
+    const timer = setTimeout(focusIdInput, 120);
+
+    return () => {
+      window.removeEventListener('focus', focusIdInput);
+      document.removeEventListener('pointerdown', handleDocumentPointer);
+      clearTimeout(timer);
+    };
+  }, [isModalOpen, isLoading]);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 max-w-xl mx-auto w-full select-none">

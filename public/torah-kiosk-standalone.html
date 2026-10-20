@@ -32,7 +32,7 @@
     .gap-4 { gap: 1rem; }
     .gap-5 { gap: 1.25rem; }
     .w-full { width: 100%; }
-    .max-w-xl { max-w: 36rem; }
+    .max-w-xl { max-width: 36rem; }
     .max-w-md { max-width: 28rem; }
     .max-w-6xl { max-width: 72rem; }
     .mx-auto { margin-left: auto; margin-right: auto; }
@@ -403,7 +403,7 @@
             onChange: (e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 9)),
             onKeyDown: (e) => e.key === 'Enter' && onSubmit(),
             autoFocus: true,
-            className: 'absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10'
+            className: 'absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10 segmented-id-hidden-input'
           }),
           e('div', { className: 'flex items-center justify-center gap-2', style: { direction: 'ltr' } },
             renderGroup([0, 1, 2]),
@@ -479,6 +479,61 @@
           if (!idInput.trim() || isLoading) return;
           onSearch(idInput.trim());
         };
+
+        useEffect(() => {
+          const focusInput = () => {
+            const inp = document.querySelector('.segmented-id-hidden-input');
+            if (inp) inp.focus();
+          };
+          window.addEventListener('focus', focusInput);
+          const handlePointer = (e) => {
+            const t = e.target;
+            if (!t || t.closest('button') || t.closest('input') || t.closest('a')) return;
+            focusInput();
+          };
+          document.addEventListener('pointerdown', handlePointer);
+          focusInput();
+          return () => {
+            window.removeEventListener('focus', focusInput);
+            document.removeEventListener('pointerdown', handlePointer);
+          };
+        }, []);
+
+        useEffect(() => {
+          const handleKey = (e) => {
+            if (isLoading) return;
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            if ((tag === 'INPUT' || tag === 'TEXTAREA') && !document.activeElement.classList.contains('segmented-id-hidden-input')) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+            let digit = null;
+            if (/^[0-9]$/.test(e.key)) {
+              digit = e.key;
+            } else if (e.code && /^Digit([0-9])$/.test(e.code)) {
+              digit = e.code.replace('Digit', '');
+            } else if (e.code && /^Numpad([0-9])$/.test(e.code)) {
+              digit = e.code.replace('Numpad', '');
+            }
+
+            if (digit !== null) {
+              e.preventDefault();
+              const inp = document.querySelector('.segmented-id-hidden-input');
+              if (inp && document.activeElement !== inp) inp.focus();
+              handleDigit(digit);
+            } else if (e.key === 'Backspace' || e.code === 'Backspace') {
+              e.preventDefault();
+              handleBackspace();
+            } else if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+              e.preventDefault();
+              handleSubmit();
+            } else if (e.key === 'Escape' || e.key === 'Delete' || e.code === 'Escape' || e.code === 'Delete') {
+              e.preventDefault();
+              handleClear();
+            }
+          };
+          window.addEventListener('keydown', handleKey, true);
+          return () => window.removeEventListener('keydown', handleKey, true);
+        }, [isLoading, idInput, errorMessage]);
 
         return e('div', { className: 'flex-1 flex flex-col items-center justify-center p-4 max-w-xl mx-auto w-full' },
           e('div', { className: 'w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-md' },
@@ -843,10 +898,10 @@
             })
           ),
           e(AdminModal, {
-            isOpen={isAdminOpen}
-            onClose={() => setIsAdminOpen(false)}
-            config={config}
-            onSaveConfig={handleSaveConfig}
+            isOpen: isAdminOpen,
+            onClose: () => setIsAdminOpen(false),
+            config: config,
+            onSaveConfig: handleSaveConfig
           })
         );
       }
